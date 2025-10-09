@@ -1,0 +1,58 @@
+:root[data-theme='parchment'] {
+  --color-bg: #E9E1CF;
+  --color-text: #20232B;
+}
+
+:root[data-theme='contrast'] {
+  --color-bg: #0B0C10;
+  --color-text: #FFFFFF;
+  --color-primary: #FF4F4F;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  padding: var(--space-2xl);
+}
+
+.layout {
+  display: grid;
+  gap: var(--space-2xl);
+  max-width: 960px;
+  width: 100%;
+}
+
+.hero {
+  background: color-mix(in oklab, var(--color-surface-2), #ffffff 8%);
+  border: var(--border-gold);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2xl);
+  text-align: center;
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  justify-content: center;
+}
+
+.panel {
+  background: color-mix(in oklab, var(--color-surface-1), #ffffff 6%);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-low);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+[data-reduced-motion='true'] * {
+  animation-duration: 1ms !important;
+  transition-duration: 1ms !important;
+}

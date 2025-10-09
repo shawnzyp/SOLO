@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dragon's Ledger Web Components</title>
+  </head>
+  <body>
+    <main class="layout">
+      <header class="hero">
+        <h1>Dragon's Ledger UI Library</h1>
+        <p>Native web components forged for solo RPG adventures.</p>
+        <div class="controls">
+          <label>
+            Theme
+            <select id="theme">
+              <option value="dark">Dark</option>
+              <option value="parchment">Parchment</option>
+              <option value="contrast">High Contrast</option>
+            </select>
+          </label>
+          <label>
+            <input type="checkbox" id="reduced-motion" /> Reduced Motion
+          </label>
+          <button id="trigger-toast" type="button">Trigger Toast</button>
+          <button id="trigger-achievement" type="button">Achievement</button>
+          <button id="open-modal" type="button">Open Modal</button>
+        </div>
+      </header>
+
+      <section class="grid">
+        <dd-button variant="primary" icon="sword">Primary</dd-button>
+        <dd-button variant="ghost">Ghost</dd-button>
+        <dd-button variant="danger">Danger</dd-button>
+        <dd-button variant="subtle" size="sm">Subtle</dd-button>
+      </section>
+
+      <section class="panel">
+        <dd-tabs value="stats">
+          <dd-tab id="stats" label="Stats">
+            <dd-character-sheet></dd-character-sheet>
+          </dd-tab>
+          <dd-tab id="quests" label="Quests">
+            <dd-quest-tracker></dd-quest-tracker>
+          </dd-tab>
+        </dd-tabs>
+      </section>
+
+      <section class="panel">
+        <h2>Dialogue Choices</h2>
+        <dd-dialogue-list></dd-dialogue-list>
+      </section>
+
+      <section class="panel">
+        <h2>Combat HUD</h2>
+        <dd-combat-hud></dd-combat-hud>
+      </section>
+
+      <section class="panel">
+        <h2>Achievement Badge</h2>
+        <dd-achievement-badge title="Fang Breaker" description="Defeat the Ash Wraith" icon="shield"></dd-achievement-badge>
+      </section>
+    </main>
+
+    <dd-modal title="Inventory">
+      <p>Obsidian ring, Ember tincture, Map of the Shifting Vale.</p>
+    </dd-modal>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

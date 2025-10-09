@@ -1,0 +1,54 @@
+export const tokens = {
+  color: {
+    primary: '#B33A3A',
+    'primary-contrast': '#F8F7F3',
+    accent: '#C8A24A',
+    bg: '#0E0F13',
+    'surface-0': '#14161C',
+    'surface-1': '#1A1D26',
+    'surface-2': '#20232B',
+    text: '#EDEBE6',
+    muted: '#B9B6AE',
+    warning: '#D96F2A',
+    success: '#4BA36D',
+    info: '#3EA5E3',
+    danger: '#C24545'
+  },
+  shadow: {
+    low: '0 1px 0 rgba(0,0,0,0.4)',
+    mid: '0 6px 16px rgba(0,0,0,0.35)',
+    high: '0 12px 32px rgba(0,0,0,0.45)'
+  },
+  radius: { sm: '6px', md: '10px', lg: '16px' },
+  space: {
+    xs: '4px',
+    sm: '8px',
+    md: '12px',
+    lg: '16px',
+    xl: '24px',
+    '2xl': '32px'
+  },
+  border: {
+    hairline: '1px solid rgba(255,255,255,0.06)',
+    gold: '1px solid #C8A24A'
+  },
+  font: {
+    display: "'Cinzel', 'Times New Roman', serif",
+    ui: "-apple-system, 'Segoe UI', Roboto, Inter, Arial, sans-serif",
+    mono: "'JetBrains Mono', Consolas, 'Courier New', monospace"
+  }
+} as const;
+
+export type Tokens = typeof tokens;
+
+export function tokensToCssVariables(source: Tokens = tokens): string {
+  const lines: string[] = [':root {'];
+  for (const [category, values] of Object.entries(source)) {
+    if (typeof values !== 'object') continue;
+    for (const [key, value] of Object.entries(values as Record<string, string>)) {
+      lines.push(`  --${category}-${key.replace(/_/g, '-')}: ${value};`);
+    }
+  }
+  lines.push('}');
+  return `${lines.join('\n')}\n`;
+}
