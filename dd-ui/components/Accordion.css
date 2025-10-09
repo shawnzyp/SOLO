@@ -1,0 +1,44 @@
+@import url('../tokens.css');
+
+.accordion {
+  display: grid;
+  gap: var(--space-md);
+  background: rgba(12,12,16,0.85);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.accordion__trigger {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(200,162,74,0.35);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-primary-contrast);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+.accordion__trigger:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+.accordion__trigger[aria-expanded='true'] .icon {
+  transform: rotate(180deg);
+}
+
+.accordion__panel {
+  padding: var(--space-md) var(--space-lg);
+  border-left: 2px solid rgba(200,162,74,0.4);
+  color: var(--color-muted);
+}
+
+.icon {
+  transition: transform var(--duration-fast) var(--easing-standard);
+}

@@ -1,0 +1,28 @@
+let injected = false;
+
+export function ensureIconSprite(): void {
+  if (injected) return;
+  injected = true;
+  const template = document.createElement('template');
+  template.innerHTML = SPRITE;
+  const node = template.content.firstElementChild;
+  if (node && !document.getElementById('dd-ui-icon-sprite')) {
+    node.id = 'dd-ui-icon-sprite';
+    document.body.prepend(node);
+  }
+}
+
+const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">${symbols()}</svg>`;
+
+function symbols(): string {
+  return `
+    <symbol id="icon-sword" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-4"/><path d="M8 16l5-5 3 3-5 5"/><path d="M16 8l4-4"/><path d="M14 6l4 4"/></g></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6z"/><path d="M12 3v18"/></g></symbol>
+    <symbol id="icon-warning" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L12 4z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1" fill="currentColor"/></g></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="icon-map" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5l6-2 4 2 6-2v16l-6 2-4-2-6 2z"/><path d="M10 3v16"/><path d="M14 5v16"/></g></symbol>
+    <symbol id="icon-audio" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9v6h3l5 4V5L8 9z"/><path d="M17 9a3 3 0 010 6"/><path d="M19 7a5 5 0 010 10"/></g></symbol>
+    <symbol id="icon-trophy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8l1 4a5 5 0 01-5 5 5 5 0 01-5-5z"/><path d="M8 4H5a3 3 0 003 3"/><path d="M16 4h3a3 3 0 01-3 3"/><path d="M12 13v4"/><path d="M9 21h6"/></g></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  `;
+}

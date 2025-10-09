@@ -1,0 +1,65 @@
+@import '@solo/dd-wc/styles/theme.css';
+
+:root {
+  --demo-background: radial-gradient(circle at 30% 15%, rgba(200,162,74,0.2), transparent 45%),
+    var(--color-bg);
+}
+
+body {
+  font-family: var(--font-ui);
+  margin: 0;
+  min-height: 100vh;
+  background: var(--demo-background);
+  color: var(--color-text);
+  display: grid;
+}
+
+main {
+  padding: min(6vw, 4rem);
+  display: grid;
+  gap: 2rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  background: rgba(14, 15, 19, 0.6);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.5rem;
+  border: var(--border-hairline);
+}
+
+.grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+section {
+  background: rgba(14, 15, 19, 0.55);
+  border-radius: var(--radius-lg);
+  border: var(--border-hairline);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-low);
+}
+
+section h2 {
+  margin-top: 0;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+dd-button + dd-button {
+  margin-left: 0.75rem;
+}
+
+dd-dialogue-list {
+  width: 100%;
+}
+
+dd-combat-hud {
+  width: 100%;
+}

@@ -1,0 +1,56 @@
+@import url('../tokens.css');
+
+.quest-tracker {
+  display: grid;
+  gap: var(--space-lg);
+  background: rgba(8,10,15,0.9);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  border: 1px solid rgba(200,162,74,0.35);
+}
+
+.quest-tracker__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.quest-tracker__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.quest-tracker__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-md);
+  align-items: center;
+  background: rgba(255,255,255,0.04);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.quest-tracker__item--complete {
+  opacity: 0.75;
+  border-color: rgba(75,163,109,0.45);
+}
+
+.quest-tracker__status {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(200,162,74,0.55), rgba(200,162,74,0.2));
+}
+
+.quest-tracker__meta {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}

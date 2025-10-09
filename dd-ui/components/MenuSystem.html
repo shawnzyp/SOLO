@@ -1,0 +1,61 @@
+<section class="menu" data-component="menu" aria-label="Game menu">
+  <div class="menu__title-screen">
+    <div class="menu__logo">Ember Archives</div>
+    <p class="menu__subtitle">A Solo RPG Expedition</p>
+    <button class="btn btn-primary" data-menu-action="continue">Continue</button>
+  </div>
+  <nav class="menu__main" aria-label="Main menu">
+    <button class="menu__item" data-menu-action="continue">Continue</button>
+    <button class="menu__item" data-menu-action="new">New Game</button>
+    <button class="menu__item" data-menu-action="options">Options</button>
+    <button class="menu__item" data-menu-action="codex">Codex</button>
+    <button class="menu__item" data-menu-action="quit">Quit</button>
+  </nav>
+  <div class="menu__tabs" role="tablist" aria-label="Pause tabs">
+    <button role="tab" aria-selected="true" aria-controls="pause-character" tabindex="0">Character</button>
+    <button role="tab" aria-selected="false" aria-controls="pause-inventory" tabindex="-1">Inventory</button>
+    <button role="tab" aria-selected="false" aria-controls="pause-quests" tabindex="-1">Quests</button>
+    <button role="tab" aria-selected="false" aria-controls="pause-map" tabindex="-1">Map</button>
+    <button role="tab" aria-selected="false" aria-controls="pause-options" tabindex="-1">Options</button>
+  </div>
+  <section class="menu__panel" id="pause-character" role="tabpanel" aria-labelledby="Character" tabindex="-1">
+    <p>Review character stats and conditions.</p>
+  </section>
+  <section class="menu__panel" id="pause-inventory" role="tabpanel" hidden>
+    <p>Manage inventory loadout.</p>
+  </section>
+  <section class="menu__panel" id="pause-quests" role="tabpanel" hidden>
+    <p>Track quest progress and side missions.</p>
+  </section>
+  <section class="menu__panel" id="pause-map" role="tabpanel" hidden>
+    <p>View the world map and fast travel points.</p>
+  </section>
+  <section class="menu__panel" id="pause-options" role="tabpanel" hidden>
+    <form class="menu__options" aria-label="Options">
+      <label for="opt-volume">Master Volume</label>
+      <input id="opt-volume" type="range" min="0" max="100" value="70">
+      <label for="opt-text">Text Size</label>
+      <input id="opt-text" type="range" min="90" max="140" value="100">
+      <label for="opt-theme">Color Theme</label>
+      <select id="opt-theme">
+        <option value="dark">Deep Obsidian</option>
+        <option value="parchment">Parchment</option>
+        <option value="high-contrast">High Contrast</option>
+      </select>
+      <label><input type="checkbox" id="opt-motion" checked> Reduced Motion</label>
+    </form>
+  </section>
+  <div class="menu__palette" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="menu__palette-content">
+      <header>
+        <h4>Command Palette</h4>
+        <p>Jump to an action</p>
+      </header>
+      <ul>
+        <li><button data-command="open-character">Open Character Sheet</button></li>
+        <li><button data-command="open-quests">Open Quest Log</button></li>
+        <li><button data-command="toggle-audio">Toggle Audio</button></li>
+      </ul>
+    </div>
+  </div>
+</section>

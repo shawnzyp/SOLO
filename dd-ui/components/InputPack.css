@@ -1,0 +1,65 @@
+@import url('../tokens.css');
+
+.input-pack {
+  display: grid;
+  gap: var(--space-lg);
+  background: rgba(12,10,9,0.85);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.input-pack__field {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.input-pack__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  border: 1px dashed rgba(200,162,74,0.35);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+}
+
+.input-pack__group > label {
+  display: inline-flex;
+  gap: var(--space-sm);
+  align-items: center;
+  letter-spacing: 0.04em;
+  font-size: 0.9rem;
+}
+
+.input-pack__slider input[type='range'] {
+  accent-color: var(--color-accent);
+}
+
+.input-pack__segmented {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
+  background: rgba(20,21,26,0.85);
+  border: 1px solid rgba(200,162,74,0.35);
+}
+
+.segmented {
+  background: transparent;
+  border: 0;
+  color: var(--color-muted);
+  padding: 0.4rem 1.2rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.segmented.is-active {
+  background: linear-gradient(180deg, rgba(200,162,74,0.85), rgba(128,92,35,0.9));
+  color: #20140a;
+  font-weight: 600;
+}
+
+.segmented:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}

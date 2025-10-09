@@ -1,0 +1,47 @@
+<section class="combat-hud" aria-label="Combat heads up display">
+  <div class="combat-hud__turn-order" role="list" aria-label="Turn order">
+    <div class="turn" aria-label="Hero turn">
+      <img src="../svg/hero.svg" alt="" role="presentation">
+      <span>Seraphine</span>
+    </div>
+    <div class="turn">
+      <img src="../svg/ally.svg" alt="" role="presentation">
+      <span>Arcanist Vey</span>
+    </div>
+    <div class="turn turn--enemy">
+      <img src="../svg/enemy.svg" alt="" role="presentation">
+      <span>Ember Drake</span>
+    </div>
+  </div>
+  <div class="combat-hud__action-bar" role="toolbar" aria-label="Actions">
+    <button class="action">
+      <svg class="icon" aria-hidden="true"><use href="../icons.svg#sword"></use></svg>
+      Strike
+    </button>
+    <button class="action">
+      <svg class="icon" aria-hidden="true"><use href="../icons.svg#staff"></use></svg>
+      Spell
+    </button>
+    <button class="action">
+      <svg class="icon" aria-hidden="true"><use href="../icons.svg#potion"></use></svg>
+      Potion
+    </button>
+    <button class="action">
+      <svg class="icon" aria-hidden="true"><use href="../icons.svg#shield"></use></svg>
+      Guard
+    </button>
+  </div>
+  <div class="combat-hud__enemy" aria-live="polite">
+    <header>
+      <h4>Ember Drake</h4>
+      <span class="tag badge-danger">Enraged</span>
+    </header>
+    <div class="health-bar" role="img" aria-label="Enemy health 65 percent">
+      <div class="health-bar__value" style="width:65%"></div>
+    </div>
+  </div>
+  <div class="combat-hud__floaters" aria-hidden="true">
+    <span class="floater floater--damage">-32</span>
+    <span class="floater floater--heal">+12</span>
+  </div>
+</section>

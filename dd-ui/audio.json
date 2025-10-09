@@ -1,0 +1,32 @@
+{
+  "click": {
+    "title": "Click Light Wood",
+    "files": ["audio/click.ogg", "audio/click.mp3"],
+    "duration": 0.6
+  },
+  "confirm": {
+    "title": "Confirm Soft Chime",
+    "files": ["audio/confirm.ogg", "audio/confirm.mp3"],
+    "duration": 0.9
+  },
+  "error": {
+    "title": "Error Low Thud",
+    "files": ["audio/error.ogg", "audio/error.mp3"],
+    "duration": 0.8
+  },
+  "achievement": {
+    "title": "Achievement Soft Fanfare",
+    "files": ["audio/achievement.ogg", "audio/achievement.mp3"],
+    "duration": 1.3
+  },
+  "page": {
+    "title": "Page Open Parchment Rustle",
+    "files": ["audio/page.ogg", "audio/page.mp3"],
+    "duration": 0.7
+  },
+  "quest": {
+    "title": "Quest Update Quill Scratch",
+    "files": ["audio/quest.ogg", "audio/quest.mp3"],
+    "duration": 1.0
+  }
+}

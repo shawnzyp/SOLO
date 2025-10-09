@@ -1,0 +1,77 @@
+@import url('../tokens.css');
+
+.character-sheet {
+  display: grid;
+  gap: var(--space-xl);
+  background: rgba(9,10,14,0.9);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  border: 1px solid rgba(200,162,74,0.4);
+}
+
+.character-sheet__subtitle {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.character-sheet__grid {
+  display: grid;
+  gap: var(--space-xl);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.character-sheet__card {
+  background: rgba(255,255,255,0.05);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  border: 1px solid rgba(255,255,255,0.1);
+  display: grid;
+  gap: var(--space-md);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: var(--space-sm);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.stat-grid li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.35);
+  font-family: var(--font-mono);
+}
+
+.skill-list,
+.inventory-list,
+.faction-list,
+.condition-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.inventory-list li,
+.faction-list li,
+.condition-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(0,0,0,0.25);
+  border-radius: var(--radius-sm);
+}
+
+.character-sheet .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--color-accent);
+}

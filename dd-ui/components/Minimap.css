@@ -1,0 +1,29 @@
+@import url('../tokens.css');
+
+.minimap {
+  display: grid;
+  gap: var(--space-md);
+  background: rgba(8,8,12,0.9);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  border: 1px solid rgba(200,162,74,0.4);
+}
+
+.minimap header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.minimap__viewport {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: var(--shadow-low);
+}
+
+.minimap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}

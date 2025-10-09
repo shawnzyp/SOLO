@@ -1,0 +1,111 @@
+@import url('../tokens.css');
+
+.combat-hud {
+  display: grid;
+  gap: var(--space-lg);
+  background: rgba(5,6,10,0.9);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  border: 1px solid rgba(200,162,74,0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.combat-hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(200,162,74,0.15), transparent 65%);
+  pointer-events: none;
+}
+
+.combat-hud__turn-order {
+  display: inline-flex;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.turn {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  min-width: 6rem;
+}
+
+.turn--enemy {
+  border-color: rgba(194,69,69,0.65);
+}
+
+.turn img {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 2px solid rgba(200,162,74,0.5);
+  background: rgba(20,20,26,0.85);
+}
+
+.combat-hud__action-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-sm);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: rgba(255,255,255,0.04);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(200,162,74,0.35);
+  color: var(--color-primary-contrast);
+  cursor: pointer;
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+.health-bar {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(60,12,12,0.65);
+  border: 1px solid rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+
+.health-bar__value {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(194,69,69,0.95), rgba(200,162,74,0.85));
+}
+
+.combat-hud__floaters {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+
+.floater {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  text-shadow: 0 0 12px rgba(0,0,0,0.65);
+  animation: mote-float 2.8s var(--easing-gentle) infinite;
+}
+
+.floater--damage {
+  color: #ff7575;
+}
+
+.floater--heal {
+  color: #68d693;
+  animation-delay: 0.8s;
+}

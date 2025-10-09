@@ -1,0 +1,39 @@
+@import url('../tokens.css');
+
+.card-panel {
+  background: linear-gradient(180deg, rgba(20,15,12,0.95), rgba(9,7,6,0.98));
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(200,162,74,0.4);
+  box-shadow: var(--shadow-mid);
+  overflow: hidden;
+}
+
+.card-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-xl);
+  background: rgba(0,0,0,0.35);
+  border-bottom: 1px solid rgba(200,162,74,0.25);
+  gap: var(--space-md);
+}
+
+.card-panel__toolbar {
+  display: inline-flex;
+  gap: var(--space-sm);
+}
+
+.card-panel__body {
+  padding: var(--space-xl);
+  display: grid;
+  gap: var(--space-md);
+}
+
+.card-panel h4 {
+  font-size: 1.25rem;
+  color: var(--color-primary-contrast);
+}
+
+.card-panel p {
+  color: var(--color-muted);
+}

@@ -1,0 +1,54 @@
+@import url('../tokens.css');
+
+.dialogue {
+  display: grid;
+  gap: var(--space-md);
+  background: rgba(10,12,16,0.9);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  border: 1px solid rgba(200,162,74,0.4);
+  box-shadow: var(--shadow-mid);
+}
+
+.dialogue__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialogue__hint {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dialogue__choices {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.dialogue__choices button {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--color-primary-contrast);
+  cursor: pointer;
+}
+
+.dialogue__choices button[aria-selected='true'] {
+  border-color: rgba(200,162,74,0.6);
+  background: linear-gradient(180deg, rgba(200,162,74,0.25), rgba(200,162,74,0.05));
+}
+
+.dialogue__choices button:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}

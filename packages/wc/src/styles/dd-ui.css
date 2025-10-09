@@ -1,0 +1,29 @@
+@import "../tokens/tokens.css";
+
+:root {
+  --dd-border-etched: 1px solid rgba(255, 255, 255, 0.12);
+  --dd-gold-gradient: linear-gradient(135deg, rgba(200,162,74,0.6), rgba(200,162,74,0.2));
+}
+
+body.dd-ui {
+  background: radial-gradient(circle at top, rgba(179,58,58,0.18), transparent 55%),
+    radial-gradient(circle at bottom, rgba(77,109,163,0.15), transparent 60%),
+    var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  margin: 0;
+}
+
+.dd-ui .panel {
+  background: var(--color-surface-1);
+  border: var(--dd-border-etched);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-mid);
+}
+
+.dd-ui .heading {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

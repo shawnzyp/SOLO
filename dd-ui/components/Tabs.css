@@ -1,0 +1,44 @@
+@import url('../tokens.css');
+
+.tabs {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.tabs [role='tablist'] {
+  display: inline-flex;
+  background: rgba(10,10,14,0.85);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid rgba(200,162,74,0.35);
+}
+
+.tabs [role='tab'] {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0.6rem 1.4rem;
+  border-radius: calc(var(--radius-lg) - 4px);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--easing-standard), color var(--duration-fast) var(--easing-standard);
+}
+
+.tabs [role='tab'][aria-selected='true'] {
+  background: linear-gradient(180deg, rgba(200,162,74,0.9), rgba(98,73,33,0.9));
+  color: #1b1206;
+  font-weight: 600;
+}
+
+.tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+.tabs [role='tabpanel'] {
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(14,15,20,0.85);
+  box-shadow: var(--shadow-low);
+}

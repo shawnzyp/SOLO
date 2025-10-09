@@ -1,0 +1,23 @@
+.button-demo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.button-demo .btn {
+  min-width: 8.5rem;
+}
+
+.button-demo .btn::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: rgba(0,0,0,0.18);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--easing-standard);
+}
+
+.button-demo .btn:hover::before {
+  opacity: 1;
+}

@@ -1,0 +1,29 @@
+<div class="modal-host" data-component="modal">
+  <button class="btn btn-ghost" data-modal-open="options">Open Options Modal</button>
+  <div class="modal" id="modal-options" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal__overlay" data-modal-dismiss></div>
+    <div class="modal__content" role="document">
+      <header class="modal__header">
+        <h3 id="modal-title">Options</h3>
+        <button class="btn btn-ghost modal__close" data-modal-dismiss>
+          <span class="sr-only">Close options</span>
+          <svg class="icon" aria-hidden="true"><use href="../icons.svg#close"></use></svg>
+        </button>
+      </header>
+      <section class="modal__body">
+        <label for="text-size">Text Size</label>
+        <input id="text-size" type="range" min="80" max="150" value="100">
+        <label for="motion-toggle">Reduced Motion</label>
+        <select id="motion-toggle">
+          <option value="system">Follow System</option>
+          <option value="on">Reduce</option>
+          <option value="off">Allow Full Motion</option>
+        </select>
+      </section>
+      <footer class="modal__footer">
+        <button class="btn btn-subtle" data-modal-dismiss>Cancel</button>
+        <button class="btn btn-primary">Apply</button>
+      </footer>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ember Archives Web Components</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <header class="controls">
+        <label>Theme
+          <select id="theme-toggle">
+            <option value="ember">Ember</option>
+            <option value="parchment">Parchment</option>
+            <option value="obsidian">Obsidian</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" id="motion-toggle" /> Reduced motion
+        </label>
+        <label>
+          <input type="checkbox" id="mute-toggle" /> Mute audio
+        </label>
+        <dd-button id="demo-toast" variant="primary" icon="map">Trigger Toast</dd-button>
+        <dd-button id="open-modal" variant="ghost">Open Modal</dd-button>
+        <dd-button id="action-sound" variant="subtle">Play Click</dd-button>
+      </header>
+
+      <section>
+        <h2>Character Sheet</h2>
+        <dd-character-sheet id="character"></dd-character-sheet>
+      </section>
+
+      <div class="grid">
+        <section>
+          <h2>Dialogue</h2>
+          <dd-dialogue-list id="dialogue"></dd-dialogue-list>
+        </section>
+        <section>
+          <h2>Quest Tracker</h2>
+          <dd-quest-tracker id="tracker"></dd-quest-tracker>
+        </section>
+      </div>
+
+      <section>
+        <h2>Combat HUD</h2>
+        <dd-combat-hud id="hud"></dd-combat-hud>
+      </section>
+
+      <section>
+        <h2>Achievement Badge</h2>
+        <dd-achievement-badge
+          title="Fang Breaker"
+          description="Defeat a basilisk without suffering petrification"
+          icon="trophy"
+        ></dd-achievement-badge>
+      </section>
+
+      <dd-modal title="Inventory" id="inventory-modal">
+        <p>Pack contents refreshed at dawn.</p>
+        <div slot="footer">
+          <dd-button variant="primary" icon="check">Close</dd-button>
+        </div>
+      </dd-modal>
+    </main>
+    <script type="module" src="main.ts"></script>
+    <script type="module">
+      const sheet = document.getElementById('character');
+      sheet.data = {
+        name: 'Lyra Emberwake',
+        level: 8,
+        ancestry: 'Aasimar',
+        stats: [
+          { name: 'Strength', value: 14 },
+          { name: 'Dexterity', value: 18 },
+          { name: 'Constitution', value: 15 },
+          { name: 'Intelligence', value: 13 },
+          { name: 'Wisdom', value: 12 },
+          { name: 'Charisma', value: 17 }
+        ],
+        skills: [
+          { name: 'Acrobatics', rank: 8 },
+          { name: 'Arcana', rank: 6 },
+          { name: 'Stealth', rank: 9 },
+          { name: 'Persuasion', rank: 7 }
+        ],
+        inventory: [
+          { name: 'Sunforged Blade', qty: 1 },
+          { name: 'Healing Draught', qty: 4 },
+          { name: 'Lockpicks', qty: 12 }
+        ],
+        factions: [
+          { name: 'Ember Wardens', standing: 'ally' },
+          { name: 'Veiled Court', standing: 'neutral' }
+        ],
+        conditions: [
+          { name: 'Blessed', description: '+1 to attack rolls' }
+        ]
+      };
+
+      const dialogue = document.getElementById('dialogue');
+      dialogue.options = [
+        { id: '1', label: 'Ask about the relic', hotkey: '1' },
+        { id: '2', label: 'Intimidate the guard', hotkey: '2' },
+        { id: '3', label: 'Offer a bribe', hotkey: '3' }
+      ];
+
+      const tracker = document.getElementById('tracker');
+      tracker.quests = [
+        { id: 'q1', title: 'Shadows of Emberfall', status: 'active', summary: 'Investigate the smuggler routes.' },
+        { id: 'q2', title: 'The Broken Seal', status: 'complete', summary: 'Reseal the planar breach.' },
+        { id: 'q3', title: 'Ashen Promise', status: 'failed', summary: 'Protect the caravan.' }
+      ];
+
+      const hud = document.getElementById('hud');
+      hud.data = {
+        enemyName: 'Frostwyrm Matriarch',
+        enemyHealth: 320,
+        enemyHealthMax: 500,
+        actionBar: [
+          { id: 'strike', icon: 'sword', label: 'Strike' },
+          { id: 'guard', icon: 'shield', label: 'Guard' },
+          { id: 'blast', icon: 'warning', label: 'Dragonfire', cooldown: 12 },
+          { id: 'map', icon: 'map', label: 'Survey' }
+        ],
+        turnOrder: [
+          { id: 't1', name: 'Lyra', initiative: 18, active: true },
+          { id: 't2', name: 'Frostwyrm', initiative: 15 },
+          { id: 't3', name: 'Kael', initiative: 12 }
+        ]
+      };
+
+      document.querySelector('dd-toast');
+      const modal = document.querySelector('dd-modal');
+      modal?.addEventListener('dd-modal-close', () => modal.removeAttribute('open'));
+    </script>
+  </body>
+</html>

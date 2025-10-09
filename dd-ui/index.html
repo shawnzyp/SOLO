@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ember Archives UI Kit</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="motion.css">
+  <link rel="stylesheet" href="components/AppShell.css">
+  <link rel="stylesheet" href="components/Button.css">
+  <link rel="stylesheet" href="components/InputPack.css">
+  <link rel="stylesheet" href="components/CardPanel.css">
+  <link rel="stylesheet" href="components/Tabs.css">
+  <link rel="stylesheet" href="components/Accordion.css">
+  <link rel="stylesheet" href="components/Toast.css">
+  <link rel="stylesheet" href="components/Modal.css">
+  <link rel="stylesheet" href="components/DialogueChoice.css">
+  <link rel="stylesheet" href="components/QuestTracker.css">
+  <link rel="stylesheet" href="components/CharacterSheet.css">
+  <link rel="stylesheet" href="components/CombatHUD.css">
+  <link rel="stylesheet" href="components/Minimap.css">
+  <link rel="stylesheet" href="components/Achievement.css">
+  <link rel="stylesheet" href="components/MenuSystem.css">
+  <style>
+    body {
+      background: var(--color-bg);
+      color: var(--color-text);
+    }
+    .app-shell__main {
+      display: grid;
+      gap: var(--space-2xl);
+    }
+    .demo-grid {
+      display: grid;
+      gap: var(--space-2xl);
+    }
+    .demo-columns {
+      display: grid;
+      gap: var(--space-2xl);
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+    .background-preview {
+      position: relative;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      min-height: 280px;
+      display: grid;
+      place-items: center;
+      color: var(--color-primary-contrast);
+    }
+    .background-preview__layer {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      transition: transform var(--duration-slow) var(--easing-gentle), opacity var(--duration-fast) var(--easing-standard);
+    }
+    .background-preview__layer[data-depth="fg"] {
+      transform: translateY(-10px);
+      mix-blend-mode: screen;
+    }
+    .background-preview__layer[data-depth="bg"] {
+      opacity: 0.8;
+    }
+    .background-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+    }
+    .background-selector button {
+      padding: 0.4rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(200,162,74,0.45);
+      background: rgba(0,0,0,0.4);
+      color: var(--color-primary-contrast);
+      cursor: pointer;
+    }
+    .background-selector button[aria-pressed="true"] {
+      background: linear-gradient(180deg, rgba(200,162,74,0.7), rgba(98,73,33,0.9));
+      color: #21160c;
+    }
+    .theme-switcher {
+      display: inline-flex;
+      gap: var(--space-sm);
+    }
+    .theme-switcher button {
+      padding: 0.4rem 1.2rem;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(200,162,74,0.35);
+      background: rgba(0,0,0,0.45);
+      color: var(--color-primary-contrast);
+      cursor: pointer;
+    }
+    .theme-switcher button[aria-pressed="true"] {
+      background: linear-gradient(180deg, rgba(200,162,74,0.9), rgba(128,92,35,0.9));
+      color: #1b1206;
+    }
+    .audio-test {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+    }
+    .audio-test button {
+      padding: 0.4rem 1.2rem;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.4);
+      color: var(--color-primary-contrast);
+      cursor: pointer;
+    }
+    .demo-section {
+      display: grid;
+      gap: var(--space-md);
+    }
+    .demo-section h2 {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="mote-layer" aria-hidden="true"></div>
+  <header class="app-shell__header" data-component="app-shell">
+    <div class="app-shell__logo" role="banner" aria-label="Ember Archives">
+      <span class="logo-mark" aria-hidden="true">⚔️</span>
+      <span class="logo-text">Ember Archives UI</span>
+    </div>
+    <button class="btn btn-ghost app-shell__menu-toggle" aria-expanded="false" aria-controls="primary-nav">
+      <span class="sr-only">Toggle navigation</span>
+      <svg class="icon" aria-hidden="true"><use href="icons.svg#menu"></use></svg>
+    </button>
+    <nav id="primary-nav" class="app-shell__nav" aria-label="Primary">
+      <a href="#overview" class="app-shell__nav-link">Overview</a>
+      <a href="#components" class="app-shell__nav-link">Components</a>
+      <a href="#menus" class="app-shell__nav-link">Menus</a>
+      <a href="#accessibility" class="app-shell__nav-link">Accessibility</a>
+    </nav>
+    <div class="app-shell__actions">
+      <div class="theme-switcher" role="group" aria-label="Theme switcher">
+        <button type="button" data-theme="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-theme="parchment" aria-pressed="false">Parchment</button>
+        <button type="button" data-theme="high-contrast" aria-pressed="false">High Contrast</button>
+      </div>
+      <button class="btn btn-subtle" data-audio-toggle>
+        <svg class="icon" aria-hidden="true"><use href="icons.svg#audio"></use></svg>
+        <span>Mute</span>
+      </button>
+    </div>
+  </header>
+  <main class="app-shell__main" id="overview" tabindex="-1">
+    <section class="demo-section surface-1" aria-labelledby="hero-title">
+      <h1 id="hero-title">Ember Archives UI Kit</h1>
+      <p>This demo showcases a production-ready, Dungeons &amp; Dragons inspired interface package. Explore components, animation, audio cues, and responsive menus tuned for solo RPG adventures.</p>
+      <div class="background-selector" role="radiogroup" aria-label="Background selector"></div>
+      <div class="background-preview" aria-live="polite">
+        <div class="background-preview__layer" data-depth="bg"></div>
+        <div class="background-preview__layer" data-depth="fg"></div>
+        <div class="background-preview__caption">Dynamic Parallax Background Preview</div>
+      </div>
+      <div class="audio-test" role="group" aria-label="Audio test buttons">
+        <button type="button" data-audio="click">Click</button>
+        <button type="button" data-audio="confirm">Confirm</button>
+        <button type="button" data-audio="error">Error</button>
+        <button type="button" data-audio="achievement">Achievement</button>
+        <button type="button" data-audio="page">Page</button>
+        <button type="button" data-audio="quest">Quest</button>
+      </div>
+    </section>
+
+    <section id="components" class="demo-section">
+      <h2>Core Components</h2>
+      <div class="demo-columns">
+        <article class="surface-1">
+          <h3>Buttons</h3>
+          <!--#include Button-->
+          <div class="button-demo" role="group" aria-label="Button variants">
+            <button class="btn btn-primary" type="button">Primary Action</button>
+            <button class="btn" type="button">Default</button>
+            <button class="btn btn-ghost" type="button">Ghost</button>
+            <button class="btn btn-danger" type="button">Danger</button>
+            <button class="btn btn-subtle" type="button">Subtle</button>
+          </div>
+        </article>
+        <article class="surface-1">
+          <h3>Inputs</h3>
+          <form class="input-pack" aria-labelledby="input-pack-title">
+            <h3 id="input-pack-title">Character Input Pack</h3>
+            <div class="input-pack__field">
+              <label for="name">Character Name</label>
+              <input class="input" id="name" name="name" type="text" placeholder="Lady Seraphine" required>
+            </div>
+            <div class="input-pack__field">
+              <label for="level">Level</label>
+              <input class="input" id="level" name="level" type="number" min="1" max="20" value="5">
+            </div>
+            <div class="input-pack__field">
+              <label for="class">Class</label>
+              <select id="class" class="input" name="class">
+                <option>Arcane Knight</option>
+                <option>Spellblade</option>
+                <option>Ranger</option>
+                <option>Oracle</option>
+              </select>
+            </div>
+            <fieldset class="input-pack__group">
+              <legend>Proficiencies</legend>
+              <label><input type="checkbox" name="prof" value="athletics" checked> Athletics</label>
+              <label><input type="checkbox" name="prof" value="arcana"> Arcana</label>
+              <label><input type="checkbox" name="prof" value="history" checked> History</label>
+            </fieldset>
+            <fieldset class="input-pack__group">
+              <legend>Combat Style</legend>
+              <label><input type="radio" name="combat" value="melee" checked> Melee</label>
+              <label><input type="radio" name="combat" value="hybrid"> Hybrid</label>
+              <label><input type="radio" name="combat" value="caster"> Caster</label>
+            </fieldset>
+            <div class="input-pack__field input-pack__slider">
+              <label for="volume">Battle Music Volume</label>
+              <input id="volume" type="range" min="0" max="100" value="60">
+            </div>
+            <div class="input-pack__segmented" role="radiogroup" aria-label="Travel pace">
+              <button type="button" class="segmented is-active" data-value="cautious">Cautious</button>
+              <button type="button" class="segmented" data-value="steady">Steady</button>
+              <button type="button" class="segmented" data-value="swift">Swift</button>
+            </div>
+          </form>
+        </article>
+        <article class="surface-1">
+          <h3>Panels and Cards</h3>
+          <section class="card-panel" aria-labelledby="card-panel-title">
+            <header class="card-panel__header">
+              <h3 id="card-panel-title">Lore Compendium</h3>
+              <div class="card-panel__toolbar" role="toolbar" aria-label="Lore actions">
+                <button class="btn btn-subtle" type="button">
+                  <svg class="icon" aria-hidden="true"><use href="icons.svg#search"></use></svg>
+                  Search
+                </button>
+                <button class="btn btn-subtle" type="button">
+                  <svg class="icon" aria-hidden="true"><use href="icons.svg#bookmark"></use></svg>
+                  Pin
+                </button>
+              </div>
+            </header>
+            <div class="card-panel__body">
+              <article>
+                <h4>Dragonfire Treaty</h4>
+                <p>The Dragonfire Treaty forged peace between the Ember Courts and the Skybound Conclave. Signed in molten gold, it binds the oathbreakers to the Ashen Vault.</p>
+              </article>
+            </div>
+          </section>
+        </article>
+        <article class="surface-1">
+          <h3>Tabs</h3>
+          <div class="tabs" data-component="tabs" aria-label="Codex sections">
+            <div role="tablist" aria-label="Codex tabs">
+              <button role="tab" aria-selected="true" id="tab-lore" aria-controls="panel-lore" tabindex="0">Lore</button>
+              <button role="tab" aria-selected="false" id="tab-factions" aria-controls="panel-factions" tabindex="-1">Factions</button>
+              <button role="tab" aria-selected="false" id="tab-beastiary" aria-controls="panel-beastiary" tabindex="-1">Bestiary</button>
+            </div>
+            <section role="tabpanel" id="panel-lore" aria-labelledby="tab-lore">
+              <p>Discover the history of the Ember Courts, the Dragonfire Treaty, and the map of the Ashen Isles.</p>
+            </section>
+            <section role="tabpanel" id="panel-factions" aria-labelledby="tab-factions" hidden>
+              <p>The Crown Sentinels defend the realm with obsidian plate and dragon glass spears.</p>
+            </section>
+            <section role="tabpanel" id="panel-beastiary" aria-labelledby="tab-beastiary" hidden>
+              <p>From ember drakes to frost wraiths, track weaknesses and resistances at a glance.</p>
+            </section>
+          </div>
+        </article>
+        <article class="surface-1">
+          <h3>Accordion</h3>
+          <section class="accordion" data-component="accordion" aria-label="Lore entries">
+            <h3 class="accordion__title">Lore Archives</h3>
+            <div class="accordion__item">
+              <button class="accordion__trigger" aria-expanded="false" aria-controls="acc-ember">
+                <span>Ember Age</span>
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#chevron"></use></svg>
+              </button>
+              <div class="accordion__panel" id="acc-ember" role="region" aria-labelledby="acc-ember-label" hidden>
+                <p id="acc-ember-label">A time when dragons walked alongside mortals, igniting the first glyphforges.</p>
+              </div>
+            </div>
+            <div class="accordion__item">
+              <button class="accordion__trigger" aria-expanded="false" aria-controls="acc-veil">
+                <span>Veiled Catacombs</span>
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#chevron"></use></svg>
+              </button>
+              <div class="accordion__panel" id="acc-veil" role="region" aria-labelledby="acc-veil-label" hidden>
+                <p id="acc-veil-label">An underground labyrinth of obsidian mirrors that whispers truths and lies alike.</p>
+              </div>
+            </div>
+          </section>
+        </article>
+      </div>
+
+      <div class="demo-columns">
+        <article class="surface-1">
+          <h3>Toast &amp; Modal</h3>
+          <div class="toast-host" data-component="toast" aria-live="polite" aria-atomic="true">
+            <button class="btn btn-primary" data-toast-trigger="success">Show Quest Toast</button>
+            <div class="toast-stack" role="region" aria-label="Notifications"></div>
+          </div>
+          <div class="modal-host" data-component="modal">
+            <button class="btn btn-ghost" data-modal-open="options">Open Options Modal</button>
+            <div class="modal" id="modal-options" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+              <div class="modal__overlay" data-modal-dismiss></div>
+              <div class="modal__content" role="document">
+                <header class="modal__header">
+                  <h3 id="modal-title">Options</h3>
+                  <button class="btn btn-ghost modal__close" data-modal-dismiss>
+                    <span class="sr-only">Close options</span>
+                    <svg class="icon" aria-hidden="true"><use href="icons.svg#close"></use></svg>
+                  </button>
+                </header>
+                <section class="modal__body">
+                  <label for="text-size">Text Size</label>
+                  <input id="text-size" type="range" min="80" max="150" value="100">
+                  <label for="motion-toggle">Reduced Motion</label>
+                  <select id="motion-toggle">
+                    <option value="system">Follow System</option>
+                    <option value="on">Reduce</option>
+                    <option value="off">Allow Full Motion</option>
+                  </select>
+                </section>
+                <footer class="modal__footer">
+                  <button class="btn btn-subtle" data-modal-dismiss>Cancel</button>
+                  <button class="btn btn-primary">Apply</button>
+                </footer>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="surface-1">
+          <h3>Dialogue Choices</h3>
+          <section class="dialogue" data-component="dialogue" aria-label="Dialogue choices">
+            <header class="dialogue__header">
+              <h3>Dialogue</h3>
+              <div class="dialogue__hint">Press <kbd>1-4</kbd> or use <svg class="icon" aria-hidden="true"><use href="icons.svg#gamepad"></use></svg></div>
+            </header>
+            <ol class="dialogue__choices" role="listbox">
+              <li><button role="option" data-choice="1" aria-selected="true">Ask about the Ember Vault.</button></li>
+              <li><button role="option" data-choice="2">Reveal the relic fragment.</button></li>
+              <li><button role="option" data-choice="3">Demand tribute for passage.</button></li>
+              <li><button role="option" data-choice="4">Leave silently.</button></li>
+            </ol>
+          </section>
+        </article>
+        <article class="surface-1">
+          <h3>Quest Tracker</h3>
+          <section class="quest-tracker" aria-labelledby="quest-tracker-title">
+            <header class="quest-tracker__header">
+              <h3 id="quest-tracker-title">Quest Tracker</h3>
+              <span class="tag badge-success">Active</span>
+            </header>
+            <ol class="quest-tracker__list">
+              <li>
+                <div class="quest-tracker__item">
+                  <span class="quest-tracker__status" aria-label="Primary quest">
+                    <svg class="icon" aria-hidden="true"><use href="icons.svg#quest"></use></svg>
+                  </span>
+                  <div class="quest-tracker__content">
+                    <h4>The Ember Vault</h4>
+                    <p>Recover the Dawnspark Relic from the Ember Vault beneath the ruined citadel.</p>
+                  </div>
+                  <span class="quest-tracker__meta">3/5</span>
+                </div>
+              </li>
+              <li>
+                <div class="quest-tracker__item quest-tracker__item--complete">
+                  <span class="quest-tracker__status" aria-label="Completed quest">
+                    <svg class="icon" aria-hidden="true"><use href="icons.svg#check"></use></svg>
+                  </span>
+                  <div class="quest-tracker__content">
+                    <h4>Scout the Ashen Ridge</h4>
+                    <p>Report back to Captain Maelis with intel on the ridge sentries.</p>
+                  </div>
+                  <span class="quest-tracker__meta">Done</span>
+                </div>
+              </li>
+            </ol>
+          </section>
+        </article>
+        <article class="surface-1">
+          <h3>Character Sheet</h3>
+          <section class="character-sheet" aria-labelledby="character-sheet-title">
+            <header>
+              <h3 id="character-sheet-title">Character Sheet</h3>
+              <p class="character-sheet__subtitle">Lady Seraphine, Emberbound Spellblade</p>
+            </header>
+            <div class="character-sheet__grid">
+              <section aria-labelledby="stats-title" class="character-sheet__card">
+                <h4 id="stats-title">Stats</h4>
+                <ul class="stat-grid">
+                  <li><span>STR</span><strong>14</strong></li>
+                  <li><span>DEX</span><strong>16</strong></li>
+                  <li><span>CON</span><strong>12</strong></li>
+                  <li><span>INT</span><strong>18</strong></li>
+                  <li><span>WIS</span><strong>13</strong></li>
+                  <li><span>CHA</span><strong>15</strong></li>
+                </ul>
+              </section>
+              <section aria-labelledby="skills-title" class="character-sheet__card">
+                <h4 id="skills-title">Skills</h4>
+                <ul class="skill-list">
+                  <li>Athletics +5</li>
+                  <li>Arcana +9</li>
+                  <li>Perception +6</li>
+                  <li>Persuasion +7</li>
+                </ul>
+              </section>
+              <section aria-labelledby="inventory-title" class="character-sheet__card">
+                <h4 id="inventory-title">Inventory</h4>
+                <ul class="inventory-list">
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#sword"></use></svg> Emberblade</li>
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#potion"></use></svg> Phoenix Tonic x2</li>
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#scroll"></use></svg> Scroll of Radiance</li>
+                </ul>
+              </section>
+              <section aria-labelledby="factions-title" class="character-sheet__card">
+                <h4 id="factions-title">Factions</h4>
+                <ul class="faction-list">
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#crown"></use></svg> Crown Sentinels <span class="tag">Allied</span></li>
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#mask"></use></svg> Umbral Cabal <span class="tag badge-warning">Wary</span></li>
+                </ul>
+              </section>
+              <section aria-labelledby="conditions-title" class="character-sheet__card">
+                <h4 id="conditions-title">Conditions</h4>
+                <ul class="condition-list">
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#burn"></use></svg> Ember Ward (Resist Fire)</li>
+                  <li><svg class="icon" aria-hidden="true"><use href="icons.svg#slow"></use></svg> Time Dilation (Speed -5ft)</li>
+                </ul>
+              </section>
+            </div>
+          </section>
+        </article>
+      </div>
+
+      <div class="demo-columns">
+        <article class="surface-1">
+          <h3>Combat HUD</h3>
+          <section class="combat-hud" aria-label="Combat heads up display">
+            <div class="combat-hud__turn-order" role="list" aria-label="Turn order">
+              <div class="turn" aria-label="Hero turn">
+                <img src="svg/hero.svg" alt="" role="presentation">
+                <span>Seraphine</span>
+              </div>
+              <div class="turn">
+                <img src="svg/ally.svg" alt="" role="presentation">
+                <span>Arcanist Vey</span>
+              </div>
+              <div class="turn turn--enemy">
+                <img src="svg/enemy.svg" alt="" role="presentation">
+                <span>Ember Drake</span>
+              </div>
+            </div>
+            <div class="combat-hud__action-bar" role="toolbar" aria-label="Actions">
+              <button class="action">
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#sword"></use></svg>
+                Strike
+              </button>
+              <button class="action">
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#staff"></use></svg>
+                Spell
+              </button>
+              <button class="action">
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#potion"></use></svg>
+                Potion
+              </button>
+              <button class="action">
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#shield"></use></svg>
+                Guard
+              </button>
+            </div>
+            <div class="combat-hud__enemy" aria-live="polite">
+              <header>
+                <h4>Ember Drake</h4>
+                <span class="tag badge-danger">Enraged</span>
+              </header>
+              <div class="health-bar" role="img" aria-label="Enemy health 65 percent">
+                <div class="health-bar__value" style="width:65%"></div>
+              </div>
+            </div>
+            <div class="combat-hud__floaters" aria-hidden="true">
+              <span class="floater floater--damage">-32</span>
+              <span class="floater floater--heal">+12</span>
+            </div>
+          </section>
+        </article>
+        <article class="surface-1">
+          <h3>Minimap Banner</h3>
+          <section class="minimap" aria-labelledby="minimap-title">
+            <header>
+              <h3 id="minimap-title">Area Banner</h3>
+              <span class="tag">Ashen Ridge</span>
+            </header>
+            <div class="minimap__viewport" role="img" aria-label="Stylized map of Ashen Ridge">
+              <svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ridge" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#3EA5E3" stop-opacity="0.6" />
+                    <stop offset="100%" stop-color="#C8A24A" stop-opacity="0.4" />
+                  </linearGradient>
+                </defs>
+                <rect width="320" height="180" fill="#0E0F13" rx="16" />
+                <path d="M10 150 Q 90 90 160 120 T 310 110" fill="none" stroke="url(#ridge)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="60" cy="120" r="8" fill="#B33A3A" />
+                <circle cx="220" cy="105" r="6" fill="#3EA5E3" />
+                <text x="70" y="118" fill="#E9E1CF" font-family="var(--font-ui)" font-size="12">You</text>
+                <text x="230" y="103" fill="#C8A24A" font-family="var(--font-ui)" font-size="12">Objective</text>
+              </svg>
+            </div>
+          </section>
+        </article>
+        <article class="surface-1">
+          <h3>Achievement Badge</h3>
+          <div class="achievement" data-component="achievement">
+            <button class="btn btn-primary" data-achievement-trigger>Trigger Achievement</button>
+            <div class="achievement__badge" role="status" aria-live="assertive" hidden>
+              <div class="achievement__icon gold-shimmer">
+                <svg class="icon" aria-hidden="true"><use href="icons.svg#trophy"></use></svg>
+              </div>
+              <div class="achievement__copy">
+                <p class="achievement__title">Achievement Unlocked</p>
+                <p class="achievement__detail">Keeper of the Ember Vault</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="menus" class="demo-section">
+      <h2>Menu System</h2>
+      <section class="menu" data-component="menu" aria-label="Game menu">
+        <div class="menu__title-screen">
+          <div class="menu__logo">Ember Archives</div>
+          <p class="menu__subtitle">A Solo RPG Expedition</p>
+          <button class="btn btn-primary" data-menu-action="continue">Continue</button>
+        </div>
+        <nav class="menu__main" aria-label="Main menu">
+          <button class="menu__item" data-menu-action="continue">Continue</button>
+          <button class="menu__item" data-menu-action="new">New Game</button>
+          <button class="menu__item" data-menu-action="options">Options</button>
+          <button class="menu__item" data-menu-action="codex">Codex</button>
+          <button class="menu__item" data-menu-action="quit">Quit</button>
+        </nav>
+        <div class="menu__tabs" role="tablist" aria-label="Pause tabs">
+          <button role="tab" aria-selected="true" aria-controls="pause-character" tabindex="0">Character</button>
+          <button role="tab" aria-selected="false" aria-controls="pause-inventory" tabindex="-1">Inventory</button>
+          <button role="tab" aria-selected="false" aria-controls="pause-quests" tabindex="-1">Quests</button>
+          <button role="tab" aria-selected="false" aria-controls="pause-map" tabindex="-1">Map</button>
+          <button role="tab" aria-selected="false" aria-controls="pause-options" tabindex="-1">Options</button>
+        </div>
+        <section class="menu__panel" id="pause-character" role="tabpanel" tabindex="-1">
+          <p>Review character stats and conditions.</p>
+        </section>
+        <section class="menu__panel" id="pause-inventory" role="tabpanel" hidden>
+          <p>Manage inventory loadout.</p>
+        </section>
+        <section class="menu__panel" id="pause-quests" role="tabpanel" hidden>
+          <p>Track quest progress and side missions.</p>
+        </section>
+        <section class="menu__panel" id="pause-map" role="tabpanel" hidden>
+          <p>View the world map and fast travel points.</p>
+        </section>
+        <section class="menu__panel" id="pause-options" role="tabpanel" hidden>
+          <form class="menu__options" aria-label="Options">
+            <label for="opt-volume">Master Volume</label>
+            <input id="opt-volume" type="range" min="0" max="100" value="70">
+            <label for="opt-text">Text Size</label>
+            <input id="opt-text" type="range" min="90" max="140" value="100">
+            <label for="opt-theme">Color Theme</label>
+            <select id="opt-theme">
+              <option value="dark">Deep Obsidian</option>
+              <option value="parchment">Parchment</option>
+              <option value="high-contrast">High Contrast</option>
+            </select>
+            <label><input type="checkbox" id="opt-motion" checked> Reduced Motion</label>
+          </form>
+        </section>
+        <div class="menu__palette" role="dialog" aria-modal="true" aria-hidden="true">
+          <div class="menu__palette-content">
+            <header>
+              <h4>Command Palette</h4>
+              <p>Jump to an action</p>
+            </header>
+            <ul>
+              <li><button data-command="open-character">Open Character Sheet</button></li>
+              <li><button data-command="open-quests">Open Quest Log</button></li>
+              <li><button data-command="toggle-audio">Toggle Audio</button></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="accessibility" class="demo-section surface-1">
+      <h2>Accessibility Highlights</h2>
+      <ul>
+        <li>All interactive controls expose <code>aria-</code> metadata and focus states.</li>
+        <li>Theme switcher maintains AAA contrast for body text and AA for chrome.</li>
+        <li>Reduced motion toggle respects system preferences and updates animation helpers.</li>
+        <li>Audio mute toggle honors user preference and <code>prefers-reduced-motion</code> for quiet experiences.</li>
+        <li>Menus, tabs, and segmented controls support keyboard roving indexes.</li>
+      </ul>
+    </section>
+  </main>
+  <footer class="app-shell__footer">
+    <p>Crafted for adventurers. Keyboard and screen reader friendly.</p>
+  </footer>
+
+  <script src="components/AppShell.js" defer></script>
+  <script src="components/Button.js" defer></script>
+  <script src="components/InputPack.js" defer></script>
+  <script src="components/Tabs.js" defer></script>
+  <script src="components/Accordion.js" defer></script>
+  <script src="components/Toast.js" defer></script>
+  <script src="components/Modal.js" defer></script>
+  <script src="components/DialogueChoice.js" defer></script>
+  <script src="components/CombatHUD.js" defer></script>
+  <script src="components/Achievement.js" defer></script>
+  <script src="components/MenuSystem.js" defer></script>
+  <script src="components/CardPanel.js" defer></script>
+  <script src="components/QuestTracker.js" defer></script>
+  <script src="components/CharacterSheet.js" defer></script>
+  <script src="components/Minimap.js" defer></script>
+  <script src="components/audio.js" defer></script>
+  <script src="main.js" defer></script>
+</body>
+</html>

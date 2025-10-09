@@ -1,0 +1,41 @@
+<form class="input-pack" aria-labelledby="input-pack-title">
+  <h3 id="input-pack-title">Character Input Pack</h3>
+  <div class="input-pack__field">
+    <label for="name">Character Name</label>
+    <input class="input" id="name" name="name" type="text" placeholder="Lady Seraphine" required>
+  </div>
+  <div class="input-pack__field">
+    <label for="level">Level</label>
+    <input class="input" id="level" name="level" type="number" min="1" max="20" value="5">
+  </div>
+  <div class="input-pack__field">
+    <label for="class">Class</label>
+    <select id="class" class="input" name="class">
+      <option>Arcane Knight</option>
+      <option>Spellblade</option>
+      <option>Ranger</option>
+      <option>Oracle</option>
+    </select>
+  </div>
+  <fieldset class="input-pack__group">
+    <legend>Proficiencies</legend>
+    <label><input type="checkbox" name="prof" value="athletics" checked> Athletics</label>
+    <label><input type="checkbox" name="prof" value="arcana"> Arcana</label>
+    <label><input type="checkbox" name="prof" value="history" checked> History</label>
+  </fieldset>
+  <fieldset class="input-pack__group">
+    <legend>Combat Style</legend>
+    <label><input type="radio" name="combat" value="melee" checked> Melee</label>
+    <label><input type="radio" name="combat" value="hybrid"> Hybrid</label>
+    <label><input type="radio" name="combat" value="caster"> Caster</label>
+  </fieldset>
+  <div class="input-pack__field input-pack__slider">
+    <label for="volume">Battle Music Volume</label>
+    <input id="volume" type="range" min="0" max="100" value="60">
+  </div>
+  <div class="input-pack__segmented" role="radiogroup" aria-label="Travel pace">
+    <button type="button" class="segmented is-active" data-value="cautious">Cautious</button>
+    <button type="button" class="segmented" data-value="steady">Steady</button>
+    <button type="button" class="segmented" data-value="swift">Swift</button>
+  </div>
+</form>

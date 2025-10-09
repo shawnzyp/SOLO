@@ -1,0 +1,44 @@
+@import url('../tokens.css');
+
+.achievement {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.achievement__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(200,162,74,0.55);
+  background: linear-gradient(120deg, rgba(200,162,74,0.25), rgba(200,162,74,0.05));
+  box-shadow: var(--shadow-mid);
+  transform-origin: left center;
+}
+
+.achievement__badge.is-visible {
+  animation: achievement-pop var(--duration-slow) var(--easing-out-back) forwards;
+}
+
+.achievement__icon {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(200,162,74,0.85), rgba(128,92,35,0.9));
+}
+
+.achievement__title {
+  margin: 0;
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.achievement__detail {
+  margin: 0;
+  color: var(--color-primary-contrast);
+}

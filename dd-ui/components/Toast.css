@@ -1,0 +1,44 @@
+@import url('../tokens.css');
+
+.toast-host {
+  position: relative;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.toast-stack {
+  position: fixed;
+  right: var(--space-xl);
+  bottom: var(--space-xl);
+  display: grid;
+  gap: var(--space-md);
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.toast {
+  display: grid;
+  gap: var(--space-xs);
+  background: linear-gradient(180deg, rgba(20,15,12,0.95), rgba(12,10,8,0.98));
+  border: 1px solid rgba(200,162,74,0.45);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: var(--shadow-mid);
+  transform-origin: bottom right;
+}
+
+.toast__title {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.toast__body {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.toast--success {
+  border-color: rgba(75,163,109,0.55);
+}
