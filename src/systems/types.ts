@@ -109,6 +109,16 @@ export interface Achievement {
   unlockedAt: number;
 }
 
+export interface DiscoveredNode {
+  id: string;
+  title: string;
+  summary: string;
+  tags?: string[];
+  firstVisitedAt: number;
+  lastVisitedAt: number;
+  visits: number;
+}
+
 export interface WorldState {
   hero: Hero | null;
   factions: Record<string, FactionStanding>;
@@ -117,6 +127,7 @@ export interface WorldState {
   journal: JournalEntry[];
   currentNodeId: string | null;
   ambientTrack?: string;
+  discoveredNodes: Record<string, DiscoveredNode>;
 }
 
 export interface Condition {
