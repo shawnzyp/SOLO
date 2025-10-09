@@ -2,14 +2,14 @@ import { html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { DdElement } from './base';
 
-interface ActionItem {
+export interface ActionItem {
   id: string;
   label: string;
   icon?: string;
   cooldown?: number;
 }
 
-interface TurnEntry {
+export interface TurnEntry {
   id: string;
   label: string;
   active?: boolean;
@@ -103,13 +103,24 @@ export class DdCombatHud extends DdElement {
       </div>
       <div class="actions">
         ${actions.map(
-          (action) => html`
-            <div class="action" role="button" tabindex="0">
-              ${action.icon ? html`<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-${action.icon}"></use></svg>` : null}
-              <span>${action.label}</span>
-              ${typeof action.cooldown === 'number' ? html`<small>CD ${action.cooldown}</small>` : null}
-            </div>
-          `
+          (action) => {
+            const disabled = typeof action.cooldown === 'number' && action.cooldown > 0;
+            return html`
+              <div
+                class="action"
+                role="button"
+                tabindex=${disabled ? -1 : 0}
+                aria-disabled=${disabled}
+                data-action-id=${action.id}
+                @click=${(event: Event) => this.onActionInvoke(action, event)}
+                @keydown=${(event: KeyboardEvent) => this.onActionKeydown(action, event)}
+              >
+                ${action.icon ? html`<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-${action.icon}"></use></svg>` : null}
+                <span>${action.label}</span>
+                ${typeof action.cooldown === 'number' ? html`<small>CD ${action.cooldown}</small>` : null}
+              </div>
+            `;
+          }
         )}
       </div>
       <div class="turn-order" role="list">
@@ -118,6 +129,39 @@ export class DdCombatHud extends DdElement {
         )}
       </div>
     `;
+  }
+
+  private onActionInvoke(action: ActionItem, event: Event) {
+    const disabled = typeof action.cooldown === 'number' && action.cooldown > 0;
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent('dd-action', {
+        detail: { action },
+        bubbles: true,
+        composed: true
+      })
+    );
+    const normalized = action.id.toLowerCase();
+    const special = ['attack', 'defend', 'useitem', 'flee'];
+    if (special.includes(normalized)) {
+      this.dispatchEvent(
+        new CustomEvent(`dd-${normalized}` as const, {
+          detail: { action },
+          bubbles: true,
+          composed: true
+        })
+      );
+    }
+  }
+
+  private onActionKeydown(action: ActionItem, event: KeyboardEvent) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.onActionInvoke(action, event);
+    }
   }
 }
 

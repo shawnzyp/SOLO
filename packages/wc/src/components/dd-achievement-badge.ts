@@ -44,6 +44,11 @@ const styles = css`
       transform: scale(1);
     }
   }
+  @media (prefers-reduced-motion: reduce) {
+    .badge {
+      animation: none;
+    }
+  }
 `;
 
 export class DdAchievementBadge extends DdElement {

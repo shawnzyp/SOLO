@@ -27,6 +27,11 @@ const styles = css`
   .toast[data-variant='danger'] {
     border-color: var(--color-danger);
   }
+  @media (prefers-reduced-motion: reduce) {
+    .toast {
+      transition: none;
+    }
+  }
 `;
 
 export interface ToastOptions {
@@ -44,6 +49,7 @@ export class DdToast extends DdElement {
   @property() message = '';
   @property({ type: Number }) duration = 4000;
   @state() private open = false;
+  private hideTimeout: number | null = null;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -52,19 +58,27 @@ export class DdToast extends DdElement {
   }
 
   show(options: ToastOptions) {
+    if (this.hideTimeout) {
+      window.clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
     this.variant = options.variant ?? 'info';
     this.message = options.message;
     this.duration = options.duration ?? 4000;
     this.open = true;
     this.requestUpdate();
     if (this.duration > 0) {
-      window.setTimeout(() => this.hide(), this.duration);
+      this.hideTimeout = window.setTimeout(() => this.hide(), this.duration);
     }
   }
 
   hide() {
     this.open = false;
     this.message = '';
+    if (this.hideTimeout) {
+      window.clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
   }
 
   render() {
@@ -86,6 +100,12 @@ export class DdToast extends DdElement {
     }
     toast.show(options);
     return toast;
+  }
+
+  static clear(): void {
+    const container = document.getElementById(containerId);
+    const toast = container?.querySelector<DdToast>('dd-toast');
+    toast?.hide();
   }
 
   private static ensureContainer(): HTMLElement {

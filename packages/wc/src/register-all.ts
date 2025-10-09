@@ -12,6 +12,7 @@ import { DdQuestTracker } from './components/dd-quest-tracker';
 import { DdCharacterSheet } from './components/dd-character-sheet';
 import { DdCombatHud } from './components/dd-combat-hud';
 import { DdAchievementBadge } from './components/dd-achievement-badge';
+import type { ToastOptions } from './components/dd-toast';
 
 const theme = new ThemeController(tokensCss, globalStyles);
 theme.applyToRoot(document);
@@ -34,6 +35,22 @@ for (const [tag, ctor] of registry) {
   if (!customElements.get(tag)) {
     customElements.define(tag, ctor);
   }
+}
+
+declare global {
+  interface Window {
+    ddToast?: {
+      push: (options: ToastOptions) => Promise<DdToast>;
+      clear: () => void;
+    };
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.ddToast = {
+    push: (options: ToastOptions) => DdToast.show(options),
+    clear: () => DdToast.clear()
+  };
 }
 
 export * from './index';

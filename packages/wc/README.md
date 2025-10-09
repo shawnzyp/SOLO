@@ -27,6 +27,19 @@ The loader automatically registers:
 
 Use the exported types to strongly type data objects (`QuestItem`, `CharacterSheetData`, `CombatHudState`, etc.).
 
+## Audio
+
+`getAudioController` ships with a default manifest powered by procedural Web Audio synthesis—no binary assets required. Import the
+`defaultAudioManifest` and either use the shared singleton or create scoped controllers:
+
+```ts
+import { getAudioController, defaultAudioManifest } from '@solo/dd-wc';
+
+const audio = getAudioController(defaultAudioManifest);
+await audio.preload();
+audio.play('achievement');
+```
+
 ## Theming
 
 `ThemeController` injects the shared design tokens and global rules via `adoptedStyleSheets` when available. You can apply it manually to additional roots:
@@ -50,3 +63,11 @@ pnpm --filter dd-ui-demo dev
 ```
 
 The demo showcases theme switching, modal focus trapping, toast notifications, dialogue hotkeys, and the combat HUD layout.
+
+## Development
+
+Vitest powers the unit test suite:
+
+```bash
+pnpm --filter @solo/dd-wc test
+```

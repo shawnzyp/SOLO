@@ -64,6 +64,14 @@ const styles = css`
   .icon {
     display: inline-flex;
   }
+  @media (prefers-reduced-motion: reduce) {
+    button {
+      transition: none;
+    }
+    button:active {
+      transform: none;
+    }
+  }
 `;
 
 export class DdButton extends DdElement {

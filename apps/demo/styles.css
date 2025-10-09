@@ -39,6 +39,20 @@ body {
   justify-content: center;
 }
 
+.controls label {
+  align-items: center;
+  background: color-mix(in oklab, var(--color-surface-0), #ffffff 6%);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.controls input[type='range'] {
+  accent-color: var(--color-accent);
+  min-width: 140px;
+}
+
 .panel {
   background: color-mix(in oklab, var(--color-surface-1), #ffffff 6%);
   border-radius: var(--radius-lg);

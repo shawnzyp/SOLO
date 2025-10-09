@@ -5,4 +5,5 @@ export { ThemeController } from './styles/theme-controller';
 export * from './icons/sprite';
 export * from './icons/register-sprite';
 export * from './audio/audio-controller';
+export { defaultAudioManifest } from './audio/manifest';
 export * from './components/index';
