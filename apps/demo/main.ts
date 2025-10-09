@@ -1,5 +1,6 @@
 import '@solo/dd-wc/register-all';
 import { DdToast, ThemeController, globalAudio } from '@solo/dd-wc';
+import type { CombatActionEvent } from '@solo/dd-wc';
 
 ThemeController.bootstrapGlobal();
 
@@ -22,6 +23,20 @@ const dialogue = document.querySelector('dd-dialogue-list');
 dialogue?.addEventListener('dd-dialogue-select', (event: Event) => {
   const detail = (event as CustomEvent).detail.option;
   DdToast.show(`You selected ${detail.label}`, { variant: 'info' });
+});
+
+const combatHud = document.querySelector('dd-combat-hud');
+combatHud?.addEventListener('dd-combat-action', (event: Event) => {
+  const detail = (event as CombatActionEvent).detail;
+  const message = `Action ${detail.action} triggered.`;
+  DdToast.show(message, { variant: detail.action === 'flee' ? 'warning' : 'success' });
+  if (detail.action === 'attack') {
+    globalAudio.play('click');
+  } else if (detail.action === 'defend') {
+    globalAudio.play('confirm');
+  } else if (detail.action === 'flee') {
+    globalAudio.play('error');
+  }
 });
 
 const modalTrigger = document.querySelector('#open-modal');

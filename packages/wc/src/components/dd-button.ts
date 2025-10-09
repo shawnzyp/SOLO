@@ -69,7 +69,8 @@ const styles = css`
 `;
 
 export class DdButton extends LitElement {
-  static styles = styles;
+  static override styles = styles;
+  static override shadowRootOptions: ShadowRootInit = { ...LitElement.shadowRootOptions, delegatesFocus: true };
 
   @property({ reflect: true }) variant: 'primary' | 'ghost' | 'danger' | 'subtle' = 'primary';
   @property({ reflect: true }) size: 'sm' | 'md' | 'lg' = 'md';
@@ -86,10 +87,6 @@ export class DdButton extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     ensureIconSprite();
-    this.setAttribute('role', 'button');
-    if (!this.hasAttribute('tabindex')) {
-      this.tabIndex = 0;
-    }
   }
 
   private onClick = (event: MouseEvent) => {

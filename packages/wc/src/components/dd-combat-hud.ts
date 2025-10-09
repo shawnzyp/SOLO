@@ -1,15 +1,20 @@
 import { LitElement, css, html } from 'lit';
 import { property } from 'lit/decorators.js';
 import { ThemeController } from '../styles/theme-controller';
+import { ensureIconSprite } from '../icons/register-icons';
 
-interface ActionSlot {
+export type CombatActionType = 'attack' | 'defend' | 'useitem' | 'flee' | string;
+
+export interface CombatActionSlot {
   id: string;
   icon: string;
   label: string;
   cooldown?: number;
+  action?: CombatActionType;
+  disabled?: boolean;
 }
 
-interface TurnEntry {
+export interface CombatTurnEntry {
   id: string;
   name: string;
   initiative: number;
@@ -17,12 +22,20 @@ interface TurnEntry {
 }
 
 export interface CombatHudData {
-  actionBar: ActionSlot[];
-  turnOrder: TurnEntry[];
+  actionBar: CombatActionSlot[];
+  turnOrder: CombatTurnEntry[];
   enemyName: string;
   enemyHealth: number;
   enemyHealthMax: number;
 }
+
+export interface CombatActionDetail {
+  id: string;
+  action: CombatActionType;
+  slot: CombatActionSlot;
+}
+
+export type CombatActionEvent = CustomEvent<CombatActionDetail>;
 
 const styles = css`
   :host {
@@ -45,9 +58,28 @@ const styles = css`
     place-items: center;
     text-align: center;
     gap: 0.35rem;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .slot button {
+    all: unset;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    gap: 0.35rem;
+    text-align: center;
+    color: inherit;
+  }
+  .slot button[disabled] {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
   .slot span {
     font-size: 0.75rem;
+  }
+  .slot:focus-within,
+  .slot button:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 4px;
   }
   .turn-order {
     display: flex;
@@ -82,7 +114,7 @@ const styles = css`
 `;
 
 export class DdCombatHud extends LitElement {
-  static styles = styles;
+  static override styles = styles;
 
   @property({ type: Object }) data?: CombatHudData;
 
@@ -90,6 +122,25 @@ export class DdCombatHud extends LitElement {
     const root = super.createRenderRoot() as ShadowRoot;
     ThemeController.applyToShadow(root);
     return root;
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    ensureIconSprite();
+  }
+
+  private dispatchAction(slot: CombatActionSlot): void {
+    if (slot.disabled) return;
+    const actionEvent: CombatActionEvent = new CustomEvent('dd-combat-action', {
+      detail: {
+        id: slot.id,
+        action: slot.action ?? slot.id,
+        slot,
+      },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(actionEvent);
   }
 
   render() {
@@ -106,13 +157,20 @@ export class DdCombatHud extends LitElement {
         ${actionBar.map(
           (slot) => html`
             <div class="slot" role="listitem">
-              <svg width="32" height="32" aria-hidden="true">
-                <use href="#icon-${slot.icon}"></use>
-              </svg>
-              <span>${slot.label}</span>
-              ${typeof slot.cooldown === 'number'
-                ? html`<small>CD ${slot.cooldown.toFixed(1)}s</small>`
-                : null}
+              <button
+                type="button"
+                ?disabled=${slot.disabled}
+                @click=${() => this.dispatchAction(slot)}
+                aria-label=${`${slot.label}${slot.cooldown ? `, cooldown ${slot.cooldown.toFixed(1)} seconds` : ''}`}
+              >
+                <svg width="32" height="32" aria-hidden="true">
+                  <use href="#icon-${slot.icon}"></use>
+                </svg>
+                <span>${slot.label}</span>
+                ${typeof slot.cooldown === 'number'
+                  ? html`<small>CD ${slot.cooldown.toFixed(1)}s</small>`
+                  : null}
+              </button>
             </div>
           `
         )}

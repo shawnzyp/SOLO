@@ -70,7 +70,7 @@ const tablistStyles = css`
 `;
 
 export class DdTabs extends LitElement {
-  static styles = tablistStyles;
+  static override styles = tablistStyles;
 
   @property({ reflect: true }) value?: string;
   @state() private focusIndex = 0;

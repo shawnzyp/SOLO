@@ -119,10 +119,10 @@
         enemyHealth: 320,
         enemyHealthMax: 500,
         actionBar: [
-          { id: 'strike', icon: 'sword', label: 'Strike' },
-          { id: 'guard', icon: 'shield', label: 'Guard' },
-          { id: 'blast', icon: 'warning', label: 'Dragonfire', cooldown: 12 },
-          { id: 'map', icon: 'map', label: 'Survey' }
+          { id: 'strike', icon: 'sword', label: 'Strike', action: 'attack' },
+          { id: 'guard', icon: 'shield', label: 'Guard', action: 'defend' },
+          { id: 'blast', icon: 'warning', label: 'Dragonfire', cooldown: 12, action: 'useitem' },
+          { id: 'retreat', icon: 'close', label: 'Retreat', action: 'flee' }
         ],
         turnOrder: [
           { id: 't1', name: 'Lyra', initiative: 18, active: true },

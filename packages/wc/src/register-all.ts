@@ -8,5 +8,7 @@ import './components/dd-character-sheet';
 import './components/dd-combat-hud';
 import './components/dd-achievement-badge';
 import { ThemeController } from './styles/theme-controller';
+import { ensureIconSprite } from './icons/register-icons';
 
 ThemeController.bootstrapGlobal();
+ensureIconSprite();

@@ -57,7 +57,7 @@ const styles = css`
 `;
 
 export class DdQuestTracker extends LitElement {
-  static styles = styles;
+  static override styles = styles;
 
   @property({ type: Array }) quests: QuestItem[] = [];
 

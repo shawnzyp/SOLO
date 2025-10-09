@@ -36,7 +36,7 @@ const styles = css`
 `;
 
 export class DdAchievementBadge extends LitElement {
-  static styles = styles;
+  static override styles = styles;
 
   @property({ type: String }) title = '';
   @property({ type: String }) description = '';

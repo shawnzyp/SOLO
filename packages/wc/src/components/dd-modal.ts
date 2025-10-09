@@ -55,11 +55,33 @@ const styles = css`
 `;
 
 export class DdModal extends LitElement {
-  static styles = styles;
+  static override styles = styles;
 
   @property({ type: Boolean, reflect: true }) open = false;
   @property({ type: String }) title = '';
   @state() private lastFocused?: HTMLElement;
+  @state() private focusables: HTMLElement[] = [];
+
+  private readonly onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeModal();
+      return;
+    }
+    if (event.key !== 'Tab' || this.focusables.length < 2) {
+      return;
+    }
+    const first = this.focusables[0];
+    const last = this.focusables[this.focusables.length - 1];
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   protected createRenderRoot() {
     const root = super.createRenderRoot() as ShadowRoot;
@@ -80,6 +102,7 @@ export class DdModal extends LitElement {
       } else {
         this.close();
       }
+      this.setAttribute('aria-hidden', this.open ? 'false' : 'true');
     }
   }
 
@@ -98,6 +121,10 @@ export class DdModal extends LitElement {
       dialog.close();
       this.setAttribute('aria-hidden', 'true');
     }
+    if (dialog) {
+      dialog.removeEventListener('keydown', this.onKeyDown);
+    }
+    this.focusables = [];
     if (this.lastFocused) {
       this.lastFocused.focus();
       this.lastFocused = undefined;
@@ -121,23 +148,10 @@ export class DdModal extends LitElement {
     const focusables = dialog.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (first) first.focus();
-    dialog.addEventListener('keydown', (event: KeyboardEvent) => {
-      if (event.key === 'Tab' && focusables.length > 1) {
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        this.closeModal();
-      }
-    });
+    this.focusables = Array.from(focusables);
+    dialog.removeEventListener('keydown', this.onKeyDown);
+    dialog.addEventListener('keydown', this.onKeyDown);
+    this.focusables[0]?.focus();
   }
 
   render() {

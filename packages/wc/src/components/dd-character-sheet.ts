@@ -2,27 +2,27 @@ import { LitElement, css, html } from 'lit';
 import { property } from 'lit/decorators.js';
 import { ThemeController } from '../styles/theme-controller';
 
-interface StatLine {
+export interface CharacterStat {
   name: string;
   value: number;
 }
 
-interface SkillLine {
+export interface CharacterSkill {
   name: string;
   rank: number;
 }
 
-interface InventoryItem {
+export interface CharacterInventoryItem {
   name: string;
   qty: number;
 }
 
-interface Faction {
+export interface CharacterFaction {
   name: string;
   standing: 'ally' | 'neutral' | 'hostile';
 }
 
-interface Condition {
+export interface CharacterCondition {
   name: string;
   description: string;
 }
@@ -31,11 +31,11 @@ export interface CharacterSheetData {
   name: string;
   level: number;
   ancestry: string;
-  stats: StatLine[];
-  skills: SkillLine[];
-  inventory: InventoryItem[];
-  factions: Faction[];
-  conditions: Condition[];
+  stats: CharacterStat[];
+  skills: CharacterSkill[];
+  inventory: CharacterInventoryItem[];
+  factions: CharacterFaction[];
+  conditions: CharacterCondition[];
 }
 
 const styles = css`
@@ -93,7 +93,7 @@ const styles = css`
 `;
 
 export class DdCharacterSheet extends LitElement {
-  static styles = styles;
+  static override styles = styles;
 
   @property({ type: Object }) data?: CharacterSheetData;
 

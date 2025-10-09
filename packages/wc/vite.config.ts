@@ -35,6 +35,7 @@ export default defineConfig({
         { src: 'src/tokens/tokens.css', dest: 'tokens' },
         { src: 'src/styles/dd-ui.css', dest: 'styles' },
         { src: 'src/styles/theme.css', dest: 'styles' },
+        { src: 'src/icons/icons.svg', dest: 'icons' },
       ],
     }),
   ],

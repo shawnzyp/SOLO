@@ -1,6 +1,15 @@
 import tokens from '../tokens/tokens.json' assert { type: 'json' };
 
-function buildCSS(scope: ':host' | ':root'): string {
+type Scope = ':host' | ':root';
+
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+const supportsConstructable =
+  isBrowser &&
+  typeof CSSStyleSheet !== 'undefined' &&
+  'replaceSync' in CSSStyleSheet.prototype &&
+  'adoptedStyleSheets' in Document.prototype;
+
+function buildCSS(scope: Scope): string {
   const lines: string[] = [];
   for (const [group, values] of Object.entries(tokens)) {
     for (const [name, value] of Object.entries(values as Record<string, string>)) {
@@ -10,51 +19,68 @@ function buildCSS(scope: ':host' | ':root'): string {
   return `${scope}{${lines.join('')}}`;
 }
 
-const tokenSheet = (() => {
-  const sheet = new CSSStyleSheet();
-  sheet.replaceSync(buildCSS(':host'));
-  return sheet;
-})();
+const hostCSS = buildCSS(':host');
+const rootCSS = buildCSS(':root');
 
-const rootSheet = (() => {
-  const sheet = new CSSStyleSheet();
-  sheet.replaceSync(buildCSS(':root'));
-  return sheet;
-})();
+const tokenSheet = supportsConstructable ? new CSSStyleSheet() : undefined;
+if (tokenSheet) {
+  tokenSheet.replaceSync(hostCSS);
+}
+
+const rootSheet = supportsConstructable ? new CSSStyleSheet() : undefined;
+if (rootSheet) {
+  rootSheet.replaceSync(rootCSS);
+}
+
+const sharedSheets: CSSStyleSheet[] = [];
+
+function ensureStyleElement(target: ParentNode, css: string, id: string): void {
+  const existing = (target as Element | ShadowRoot).querySelector?.(`style[data-dd-ui="${id}"]`);
+  if (existing) return;
+  const style = document.createElement('style');
+  style.dataset.ddUi = id;
+  style.textContent = css;
+  target.prepend(style);
+}
 
 export class ThemeController {
-  static supportsAdoption = Array.isArray((document as any).adoptedStyleSheets);
+  static get supportsAdoption(): boolean {
+    return supportsConstructable;
+  }
 
-  static bootstrapGlobal(): void {
-    if (!this.supportsAdoption) {
-      if (!document.head.querySelector('style[data-dd-ui="tokens"]')) {
-        const style = document.createElement('style');
-        style.dataset.ddUi = 'tokens';
-        style.textContent = buildCSS(':root');
-        document.head.appendChild(style);
-      }
-      return;
-    }
-    const current = ((document as any).adoptedStyleSheets as CSSStyleSheet[]) ?? [];
-    if (!current.includes(rootSheet)) {
-      (document as any).adoptedStyleSheets = [...current, rootSheet];
+  static registerSharedSheet(sheet: CSSStyleSheet): void {
+    if (!supportsConstructable) return;
+    if (!sharedSheets.includes(sheet)) {
+      sharedSheets.push(sheet);
     }
   }
 
-  static applyToShadow(root: ShadowRoot | DocumentFragment): void {
-    if (this.supportsAdoption) {
-      const sheets = ((root as any).adoptedStyleSheets as CSSStyleSheet[]) ?? [];
-      if (!sheets.includes(tokenSheet)) {
-        (root as any).adoptedStyleSheets = [...sheets, tokenSheet];
+  static bootstrapGlobal(): void {
+    if (!isBrowser) return;
+    if (supportsConstructable && rootSheet) {
+      const current = (document.adoptedStyleSheets ?? []) as CSSStyleSheet[];
+      if (!current.includes(rootSheet)) {
+        document.adoptedStyleSheets = [...current, rootSheet];
       }
+      sharedSheets.forEach((sheet) => {
+        if (!document.adoptedStyleSheets.includes(sheet)) {
+          document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+        }
+      });
       return;
     }
-    const existing = (root as any).querySelector?.('style[data-dd-ui="tokens"]');
-    if (!existing) {
-      const style = document.createElement('style');
-      style.dataset.ddUi = 'tokens';
-      style.textContent = buildCSS(':host');
-      (root as any).prepend?.(style);
+    ensureStyleElement(document.head, rootCSS, 'tokens');
+  }
+
+  static applyToShadow(root: ShadowRoot | DocumentFragment): void {
+    if (!isBrowser) return;
+    if (supportsConstructable && tokenSheet) {
+      const adopted = ((root as any).adoptedStyleSheets as CSSStyleSheet[]) ?? [];
+      const next = adopted.includes(tokenSheet) ? adopted : [...adopted, tokenSheet];
+      const withShared = sharedSheets.reduce((acc, sheet) => (acc.includes(sheet) ? acc : [...acc, sheet]), next);
+      (root as any).adoptedStyleSheets = withShared;
+      return;
     }
+    ensureStyleElement(root, hostCSS, 'tokens');
   }
 }

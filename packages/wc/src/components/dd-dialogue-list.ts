@@ -9,6 +9,12 @@ export interface DialogueOption {
   hotkey?: string;
 }
 
+export interface DialogueSelectDetail {
+  option: DialogueOption;
+}
+
+export type DialogueSelectEvent = CustomEvent<DialogueSelectDetail>;
+
 const styles = css`
   :host {
     display: block;
@@ -50,7 +56,7 @@ const styles = css`
 `;
 
 export class DdDialogueList extends LitElement {
-  static styles = styles;
+  static override styles = styles;
 
   @property({ type: Array }) options: DialogueOption[] = [];
   @state() private focusedIndex = 0;
@@ -63,12 +69,24 @@ export class DdDialogueList extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    window.addEventListener('keydown', this.onKeyDown);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.onKeyDown);
+    }
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
-    window.removeEventListener('keydown', this.onKeyDown);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.onKeyDown);
+    }
+  }
+
+  updated(changed: Map<string, unknown>): void {
+    if (changed.has('options')) {
+      if (this.focusedIndex >= this.options.length) {
+        this.focusedIndex = Math.max(0, this.options.length - 1);
+      }
+    }
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
@@ -99,13 +117,12 @@ export class DdDialogueList extends LitElement {
   private chooseOption(index: number): void {
     const option = this.options[index];
     if (!option) return;
-    this.dispatchEvent(
-      new CustomEvent('dd-dialogue-select', {
-        detail: { option },
-        bubbles: true,
-        composed: true,
-      })
-    );
+    const event: DialogueSelectEvent = new CustomEvent('dd-dialogue-select', {
+      detail: { option },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(event);
   }
 
   render() {
