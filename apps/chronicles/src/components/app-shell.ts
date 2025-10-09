@@ -20,7 +20,11 @@ export class AppShell extends WorldComponent {
         <section class="dd-panel story-panel">
           <dd-story-panel></dd-story-panel>
         </section>
+        <section class="dd-panel map-panel">
+          <dd-atlas-map></dd-atlas-map>
+        </section>
         <section class="dd-panel dialogue-panel">
+          <dd-control-bar></dd-control-bar>
           <dd-dialogue-list></dd-dialogue-list>
         </section>
         <section class="dd-panel character-sheet">
@@ -28,6 +32,12 @@ export class AppShell extends WorldComponent {
         </section>
         <section class="dd-panel quest-tracker">
           <dd-quest-tracker></dd-quest-tracker>
+        </section>
+        <section class="dd-panel journal-panel">
+          <dd-journal-timeline></dd-journal-timeline>
+        </section>
+        <section class="dd-panel achievement-panel">
+          <dd-achievement-grid></dd-achievement-grid>
         </section>
         <dd-combat-hud></dd-combat-hud>
         <dd-toast-container></dd-toast-container>

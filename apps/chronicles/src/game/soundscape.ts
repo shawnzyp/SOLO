@@ -4,17 +4,23 @@ type CueKey = 'success' | 'failure' | 'notify' | 'victory' | 'defeat' | 'combat'
 
 class SoundscapeController {
   private context: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
   private ambienceGain: GainNode | null = null;
   private ambienceOscillators: OscillatorNode[] = [];
   private unlocked = false;
   private currentAmbience: AmbienceKey | null = null;
+  private readonly ambienceBase = 0.12;
+  private muted = false;
 
   unlock() {
     if (this.unlocked) return;
     this.context = new AudioContext();
+    this.masterGain = this.context.createGain();
+    this.masterGain.gain.value = this.muted ? 0 : 0.9;
+    this.masterGain.connect(this.context.destination);
     this.ambienceGain = this.context.createGain();
-    this.ambienceGain.gain.value = 0.12;
-    this.ambienceGain.connect(this.context.destination);
+    this.ambienceGain.gain.value = this.muted ? 0 : this.ambienceBase;
+    this.ambienceGain.connect(this.masterGain);
     this.unlocked = true;
   }
 
@@ -24,6 +30,7 @@ class SoundscapeController {
     this.stopAmbience();
     const { context } = this;
     const frequencies = this.getFrequencies(kind);
+    this.ambienceGain.gain.value = this.muted ? 0 : this.ambienceBase;
     this.ambienceOscillators = frequencies.map((frequency, index) => {
       const osc = context.createOscillator();
       osc.type = index % 2 === 0 ? 'sine' : 'triangle';
@@ -52,7 +59,7 @@ class SoundscapeController {
   }
 
   playCue(cue: CueKey) {
-    if (!this.unlocked || !this.context) return;
+    if (!this.unlocked || !this.context || !this.masterGain || this.muted) return;
     const duration = 0.4;
     const osc = this.context.createOscillator();
     const gain = this.context.createGain();
@@ -64,9 +71,23 @@ class SoundscapeController {
     gain.gain.linearRampToValueAtTime(0.3, now + 0.05);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
     osc.connect(gain);
-    gain.connect(this.context.destination);
+    gain.connect(this.masterGain);
     osc.start(now);
     osc.stop(now + duration);
+  }
+
+  setMuted(muted: boolean) {
+    this.muted = muted;
+    if (this.masterGain) {
+      this.masterGain.gain.value = muted ? 0 : 0.9;
+    }
+    if (this.ambienceGain) {
+      this.ambienceGain.gain.value = muted ? 0 : this.ambienceBase;
+    }
+  }
+
+  isMuted(): boolean {
+    return this.muted;
   }
 
   private getFrequencies(kind: AmbienceKey): number[] {

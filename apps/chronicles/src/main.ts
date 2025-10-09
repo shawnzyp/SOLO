@@ -5,5 +5,9 @@ import './components/character-sheet';
 import './components/quest-tracker';
 import './components/combat-hud';
 import './components/toast-container';
+import './components/map-view';
+import './components/achievement-grid';
+import './components/journal-timeline';
+import './components/control-bar';
 
 // The imports above register the custom elements and bootstrap the world state.

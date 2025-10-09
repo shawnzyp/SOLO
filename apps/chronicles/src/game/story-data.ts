@@ -10,6 +10,8 @@ export const STORY_NODES: StoryNode[] = [
     location: 'The Gilded Griffin Tavern',
     ambiance: 'tavern',
     background: 'tavern',
+    region: 'emberfall',
+    unlockRegions: ['emberfall'],
     narrative: [
       'In the heart of Emberfall, the night market hums with secrets. Beneath lanterns painted with dragonfire sigils, whispers coil around your table like smoke.',
       'A courier from the Circle of Embers slides a vellum envelope before you. The seal bears the mark of the Lone Adventurer—a title you earned through trials and scars.',
@@ -32,6 +34,7 @@ export const STORY_NODES: StoryNode[] = [
         next: 'wilderness',
         journalText: 'You pledged to defend the shard before rivals arrive.',
         questUpdate: { questId: 'emberShard', progress: 'Departed Emberfall for the Duskfen Forest.' },
+        achievementId: 'emberfallEnvoy',
       },
     ],
   },
@@ -41,6 +44,7 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Shadowed Alcove',
     ambiance: 'city',
     background: 'gloom',
+    region: 'emberfall',
     narrative: [
       'Your trained gaze spots a figure cloaked in onyx leather, sigils of the Black Guild glinting beneath their cloak. They raise a goblet in acknowledgement, inviting parley.',
       'The agent proposes an alliance: share the shard, and the Guild will ensure no blood is spilled in Emberfall—so long as you owe them a favor yet to be named.',
@@ -72,6 +76,7 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Moonlit Alley',
     ambiance: 'city',
     background: 'gloom',
+    region: 'emberfall',
     narrative: [
       'You spot movement—too late. A guild cutpurse bolts into the alley, alarm raised. The Circle loses a measure of confidence in your subtlety.',
       'The courier urges haste before the Guild tightens its net around the Duskfen approaches.',
@@ -93,6 +98,8 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Forest Edge',
     ambiance: 'wilderness',
     background: 'forest',
+    region: 'duskfenEdge',
+    unlockRegions: ['duskfenEdge'],
     narrative: [
       'Fog clings to twisted trees as you enter the Duskfen. Embermotes drift on the air, sparks from the imprisoned starlight ahead.',
       'Tracks reveal you are not alone—the Black Guild hunts the shard as well. You ready your blade as a shadow detaches from the mire.',
@@ -111,9 +118,13 @@ export const STORY_NODES: StoryNode[] = [
         skillCheck: { ability: 'dexterity', skill: 'stealth', dc: 14, description: 'You melt into the fog, seeking a vantage.' },
         next: { success: 'ritual_site', failure: 'ambush' },
         journalText: 'You tried to outmaneuver the ambushers.',
+        successAchievementId: 'mistWalker',
       },
     ],
-    onEnter: updateQuest('emberShard', 'active', 'Entered the Duskfen Forest in pursuit of the shard.'),
+    onEnter: (state) => {
+      state.updateQuest({ questId: 'emberShard', status: 'active', progress: 'Entered the Duskfen Forest in pursuit of the shard.' });
+      state.unlockAchievement('chartedDuskfen');
+    },
   },
   {
     id: 'ambush',
@@ -121,6 +132,8 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Duskfen Clearing',
     ambiance: 'combat',
     background: 'forest',
+    region: 'duskfenClearing',
+    unlockRegions: ['duskfenClearing'],
     narrative: [
       'A Black Guild enforcer lunges from the mist, twin blades swirling with alchemical sparks. The duel for the shard begins.',
     ],
@@ -145,6 +158,8 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Ancient Stone Circle',
     ambiance: 'ritual',
     background: 'ruins',
+    region: 'stoneCircle',
+    unlockRegions: ['stoneCircle'],
     narrative: [
       'An obsidian monolith pulses with caged starlight. Circle druids chant a warding litany, relieved at your arrival. The shard sings—a melody that promises both salvation and ruin.',
       'With the enforcer defeated or evaded, you may sanctify the shard or harness it for your own ascent.',
@@ -158,6 +173,7 @@ export const STORY_NODES: StoryNode[] = [
         questUpdate: { questId: 'emberShard', status: 'completed', progress: 'You consecrated the shard to the Circle.' },
         reward: { xp: 250 },
         journalText: 'You consecrated the shard, preserving balance in Emberfall.',
+        achievementId: 'guardianOfLight',
       },
       {
         id: 'ritual_channel',
@@ -168,6 +184,7 @@ export const STORY_NODES: StoryNode[] = [
         reputationDelta: { circle: -8, blackGuild: 4 },
         reward: { xp: 400, itemId: 'emberSigil' },
         journalText: 'You dared to wield the shard\'s raw light.',
+        successAchievementId: 'ascendantSoloist',
       },
     ],
   },
@@ -177,6 +194,7 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Starlit Nexus',
     ambiance: 'ritual',
     background: 'ruins',
+    region: 'stoneCircle',
     narrative: [
       'Power floods your veins as the shard bows to your command. Factions will tremble, but for now the light obeys.',
       'The Circle eyes you warily even as some kneel; the Black Guild whispers of a new force in Emberfall.',
@@ -184,6 +202,7 @@ export const STORY_NODES: StoryNode[] = [
     onEnter: (state) => {
       state.adjustExperience(500);
       state.addJournalEntry('You seized the shard and reshaped destiny. A new legend ignites.');
+      state.unlockAchievement('ascendantSoloist');
     },
   },
   {
@@ -192,6 +211,8 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Circle Sanctum',
     ambiance: 'ritual',
     background: 'ruins',
+    region: 'emberfallSanctum',
+    unlockRegions: ['emberfallSanctum'],
     narrative: [
       'The Circle crowns you Guardian of Emberfall. Songs ripple through the sanctum as the shard\'s radiance is contained once more.',
       'Your legend grows, and Emberfall sleeps safely beneath your vigil—for now.',
@@ -199,6 +220,7 @@ export const STORY_NODES: StoryNode[] = [
     onEnter: (state) => {
       state.adjustExperience(350);
       state.addJournalEntry('Emberfall hails you as guardian and savior.');
+      state.unlockAchievement('guardianOfLight');
     },
   },
   {
@@ -207,6 +229,8 @@ export const STORY_NODES: StoryNode[] = [
     location: 'Shattered Grove',
     ambiance: 'ritual',
     background: 'gloom',
+    region: 'shatteredGrove',
+    unlockRegions: ['shatteredGrove'],
     narrative: [
       'Pain blossoms as the shard slips from your grasp. The Black Guild melts into the night with stolen starlight while the Circle cries out in despair.',
       'Dark omens stir above Emberfall. Yet failure writes its own lessons—you may rise again, wiser and unbroken.',

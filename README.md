@@ -6,9 +6,11 @@ A single-player digital tabletop experience that fuses narrative storytelling, t
 
 - **Dynamic Narrative Engine** — Branching story nodes with skill checks, faction consequences, quest updates, and achievements tracked through the in-game journal.
 - **Turn-based Combat** — Lightweight d20 combat system with initiative-style turns, critical hits, defensive stances, consumables, and combat logs.
-- **Rich Character Sheet** — Live-updating attributes, skills, health, inventory, faction reputation, and chronicle feed.
-- **Quest Tracker** — Color-coded quest states with faction tags and evolving progress notes.
-- **Ambient Audio & Toasts** — Minimalist synthesised ambience and dice-roll stingers powered by the Web Audio API.
+- **Rich Character Sheet** — Live-updating attributes, skills, health, inventory, faction reputation, and badge progress.
+- **Atlas & Journal** — Interactive map of discovered regions plus a timeline feed of major choices and rolls.
+- **Quest Tracker & Achievements** — Color-coded quest states, faction tags, and a badge grid celebrating milestone unlocks.
+- **Ambient Audio & Toasts** — Minimalist synthesised ambience, dice-roll stingers, and celebratory cues powered by the Web Audio API.
+- **Auto-Save Persistence** — Progress, map discoveries, and achievements store to localStorage so you can pause and resume.
 - **Modular Story Data** — Author new adventures by extending `story-data.ts` and the supporting codex.
 
 ## Getting Started
@@ -18,7 +20,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` to play. The story auto-saves in memory; refresh to start again.
+Open `http://localhost:5173` to play. The Chronicle auto-saves locally—use the control bar to restart whenever you want a fresh run.
 
 To produce a static build:
 
@@ -35,8 +37,8 @@ apps/chronicles/
   index.html          # App entry point
   src/
     main.ts           # Registers Web Components
-    components/       # UI building blocks (story, dialogue, sheet, quests, combat, toasts)
-    game/             # Narrative data, world state, dice, audio controller
+    components/       # UI building blocks (story, dialogue, map, sheet, quests, achievements, combat, toasts)
+    game/             # Narrative data, world state, atlas, achievements, dice, audio controller
     styles/           # Global theme styling
 ```
 

@@ -17,7 +17,7 @@ export class CharacterSheet extends WorldComponent {
         <div class="skills"></div>
         <div class="factions"></div>
         <div class="inventory"></div>
-        <div class="journal-log"></div>
+        <div class="achievement-list"></div>
       `;
     }
     super.connectedCallback();
@@ -25,15 +25,15 @@ export class CharacterSheet extends WorldComponent {
 
   protected render(): void {
     if (!this.state) return;
-    const { character, journal } = this.state;
+    const { character, achievements } = this.state;
     const summaryEl = this.querySelector('.summary') as HTMLElement | null;
     const hpEl = this.querySelector('.hp') as HTMLElement | null;
     const attributesEl = this.querySelector('.attributes') as HTMLElement | null;
     const skillsEl = this.querySelector('.skills') as HTMLElement | null;
     const factionsEl = this.querySelector('.factions') as HTMLElement | null;
     const inventoryEl = this.querySelector('.inventory') as HTMLElement | null;
-    const journalEl = this.querySelector('.journal-log') as HTMLElement | null;
-    if (!summaryEl || !hpEl || !attributesEl || !skillsEl || !factionsEl || !inventoryEl || !journalEl) return;
+    const achievementEl = this.querySelector('.achievement-list') as HTMLElement | null;
+    if (!summaryEl || !hpEl || !attributesEl || !skillsEl || !factionsEl || !inventoryEl || !achievementEl) return;
 
     summaryEl.innerHTML = `
       <div><strong>${character.name}</strong><br/>${character.race} ${character.class}</div>
@@ -86,8 +86,8 @@ export class CharacterSheet extends WorldComponent {
       .join('');
     inventoryEl.innerHTML = `<h3>Inventory</h3><div>${inventory}</div>`;
 
-    const recentJournal = journal.slice(0, 5).map((entry) => `<li>${entry.text}</li>`).join('');
-    journalEl.innerHTML = `<h3>Chronicle</h3><ul>${recentJournal}</ul>`;
+    const unlocked = achievements.filter((entry) => entry.unlockedAt).map((entry) => `<li>${entry.icon} ${entry.name}</li>`);
+    achievementEl.innerHTML = `<h3>Badges</h3><ul>${unlocked.join('') || '<li>No new badges yet.</li>'}</ul>`;
   }
 }
 

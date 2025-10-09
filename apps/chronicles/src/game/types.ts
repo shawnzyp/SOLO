@@ -55,6 +55,25 @@ export interface JournalEntry {
   text: string;
 }
 
+export interface AchievementState {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt?: number;
+}
+
+export interface RegionState {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  row: number;
+  col: number;
+  status: 'locked' | 'available' | 'visited';
+  discoveredAt?: number;
+}
+
 export interface CharacterState {
   name: string;
   race: string;
@@ -91,6 +110,9 @@ export interface StoryChoice {
   reward?: { xp?: number; gold?: number; itemId?: string };
   condition?: (state: WorldStateSnapshot) => boolean;
   journalText?: string;
+  achievementId?: string;
+  successAchievementId?: string;
+  failureAchievementId?: string;
 }
 
 export interface EncounterParticipant {
@@ -120,6 +142,9 @@ export interface StoryNode {
   choices?: StoryChoice[];
   encounter?: Encounter;
   onEnter?: (state: MutableWorldState) => void;
+  region?: string;
+  unlockRegions?: string[];
+  achievementId?: string;
 }
 
 export interface ToastMessage {
@@ -127,6 +152,8 @@ export interface ToastMessage {
   type: 'info' | 'success' | 'failure';
   title: string;
   body: string;
+  tone?: 'notify' | 'success' | 'failure' | 'victory' | 'defeat' | 'combat';
+  icon?: string;
 }
 
 export interface CombatState {
@@ -148,6 +175,9 @@ export interface WorldStateSnapshot {
   currentNodeId: string;
   combat: CombatState;
   toasts: ToastMessage[];
+  achievements: AchievementState[];
+  map: RegionState[];
+  visitedNodes: string[];
 }
 
 export interface MutableWorldState extends WorldStateSnapshot {
@@ -159,6 +189,8 @@ export interface MutableWorldState extends WorldStateSnapshot {
   grantItem: (itemId: string) => void;
   adjustExperience: (xp: number) => void;
   setCombat: (combat: CombatState) => void;
+  unlockAchievement: (achievementId: string) => void;
+  discoverRegion: (regionId: string, options?: { visited?: boolean; announce?: boolean }) => void;
 }
 
 export type Subscriber = (state: WorldStateSnapshot) => void;
