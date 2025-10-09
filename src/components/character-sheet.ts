@@ -1,23 +1,35 @@
 import { html, render } from 'lit-html';
-import type { Hero } from '../systems/types';
+import type { Hero, FactionStanding, Achievement } from '../systems/types';
 import { SKILLS } from '../systems/types';
+
+interface CharacterSheetData {
+  hero: Hero | null;
+  factions?: FactionStanding[];
+  achievements?: Achievement[];
+}
 
 export class DDCharacterSheet extends HTMLElement {
   private hero: Hero | null = null;
+  private factions: FactionStanding[] = [];
+  private achievements: Achievement[] = [];
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
   }
 
-  set data(hero: Hero | null) {
-    this.hero = hero;
+  set data(payload: CharacterSheetData) {
+    this.hero = payload.hero;
+    this.factions = payload.factions ?? [];
+    this.achievements = payload.achievements ?? [];
     this.update();
   }
 
   private update(): void {
     if (!this.shadowRoot) return;
     const hero = this.hero;
+    const factions = this.factions;
+    const achievements = this.achievements;
     render(
       html`
         <style>
@@ -103,7 +115,8 @@ export class DDCharacterSheet extends HTMLElement {
 
           .skills,
           .inventory,
-          .factions {
+          .factions,
+          .achievements {
             margin-bottom: 1.5rem;
           }
 
@@ -125,6 +138,41 @@ export class DDCharacterSheet extends HTMLElement {
             padding: 0.35rem 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             font-size: 0.9rem;
+          }
+
+          .faction-bar {
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            margin-top: 0.35rem;
+          }
+
+          .faction-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6ac0ff, #f0b35a);
+          }
+
+          .achievements ul {
+            display: grid;
+            gap: 0.65rem;
+          }
+
+          .achievements li {
+            flex-direction: column;
+            align-items: flex-start;
+            border-bottom: none;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.75rem;
+            border-radius: 12px;
+          }
+
+          .achievements time {
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.65);
           }
         </style>
         ${hero
@@ -161,14 +209,15 @@ export class DDCharacterSheet extends HTMLElement {
               <section class="skills">
                 <div class="section-title">Skills</div>
                 <ul>
-                  ${SKILLS.map(
-                    (skill) => html`
+                  ${SKILLS.map((skill) => {
+                    const value = hero.skills[skill.id] ?? 0;
+                    return html`
                       <li>
                         <span>${skill.label}</span>
-                        <strong>${hero.skills[skill.id] >= 0 ? '+' : ''}${hero.skills[skill.id]}</strong>
+                        <strong>${value >= 0 ? '+' : ''}${value}</strong>
                       </li>
-                    `,
-                  )}
+                    `;
+                  })}
                 </ul>
               </section>
               <section class="inventory">
@@ -185,12 +234,62 @@ export class DDCharacterSheet extends HTMLElement {
                       )
                     : html`<li><span>Empty pack</span><span></span></li>`}
                 </ul>
+                <p>Gold: ${hero.gold}</p>
+              </section>
+              <section class="factions">
+                <div class="section-title">Factions</div>
+                <ul>
+                  ${factions.length > 0
+                    ? factions.map(
+                        (faction) => html`
+                          <li title=${faction.description}>
+                            <div>
+                              <strong>${faction.name}</strong>
+                          <div class="faction-bar">
+                            <div
+                              class="faction-fill"
+                              style="width: ${this.factionWidth(faction.value)}%"
+                            ></div>
+                          </div>
+                        </div>
+                        <span>${faction.value}</span>
+                          </li>
+                        `,
+                      )
+                    : html`<li><span>Unknown allegiances</span><span></span></li>`}
+                </ul>
+              </section>
+              <section class="achievements">
+                <div class="section-title">Achievements</div>
+                <ul>
+                  ${achievements.length > 0
+                    ? achievements.map(
+                        (achievement) => html`
+                          <li>
+                            <div><strong>${achievement.title}</strong></div>
+                            <div>${achievement.description}</div>
+                            <time>${new Date(achievement.unlockedAt).toLocaleString()}</time>
+                          </li>
+                        `,
+                      )
+                    : html`<li>
+                        <div><strong>No achievements unlocked yet.</strong></div>
+                        <div>Forge your legend to earn renown.</div>
+                      </li>`}
+                </ul>
               </section>
             `
           : html`<p>Create your hero to reveal their legend.</p>`}
       `,
       this.shadowRoot,
     );
+  }
+
+  private factionWidth(value: number): number {
+    const min = -10;
+    const max = 10;
+    const clamped = Math.max(min, Math.min(max, value));
+    return ((clamped - min) / (max - min)) * 100;
   }
 }
 

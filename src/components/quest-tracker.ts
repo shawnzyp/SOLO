@@ -76,6 +76,18 @@ export class DDQuestTracker extends HTMLElement {
             color: var(--dd-danger);
           }
 
+          .faction-tag {
+            display: inline-block;
+            margin-left: 0.5rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(240, 179, 90, 0.18);
+            color: rgba(240, 179, 90, 0.9);
+          }
+
           p {
             margin: 0;
             font-size: 0.85rem;
@@ -89,6 +101,9 @@ export class DDQuestTracker extends HTMLElement {
                 (quest) => html`
                   <li>
                     <span class="status ${quest.status}">${quest.status}</span>
+                    ${quest.faction
+                      ? html`<span class="faction-tag">${quest.faction}</span>`
+                      : null}
                     <div><strong>${quest.title}</strong></div>
                     <p>${quest.summary}</p>
                     ${quest.reward ? html`<p>Reward: ${quest.reward}</p>` : null}

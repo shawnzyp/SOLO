@@ -63,13 +63,13 @@ export const storyNodes: StoryNode[] = [
         effects: [
           {
             type: 'addQuest',
-            quest: {
-              id: 'ember-rift',
-              title: 'Ember Rift Mystery',
-              summary: 'Discover why the Ember Rift has begun to pulse with wild magic.',
-              status: 'active',
-              faction: 'circle',
-            },
+              quest: {
+                id: 'ember-rift',
+                title: 'Ember Rift Mystery',
+                summary: 'Discover why the Ember Rift has begun to pulse with wild magic.',
+                status: 'active',
+                faction: 'Circle of Embers',
+              },
           },
           {
             type: 'log',
@@ -150,14 +150,14 @@ export const storyNodes: StoryNode[] = [
         effects: [
           {
             type: 'addQuest',
-            quest: {
-              id: 'guild-contract',
-              title: 'Guild Contract: Ember Shard',
-              summary: 'Secure an Ember Shard from the wilds for the Black Guild.',
-              status: 'active',
-              faction: 'black-guild',
-              reward: 'Favor of the Black Guild',
-            },
+              quest: {
+                id: 'guild-contract',
+                title: 'Guild Contract: Ember Shard',
+                summary: 'Secure an Ember Shard from the wilds for the Black Guild.',
+                status: 'active',
+                faction: 'Black Guild',
+                reward: 'Favor of the Black Guild',
+              },
           },
         ],
         toNode: 'verdyn-road',

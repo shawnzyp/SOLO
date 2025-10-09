@@ -35,7 +35,7 @@ export interface WorldEventDetailMap {
   'journal-entry': JournalEntry;
   toast: ToastMessage;
   'combat-start': CombatEncounter;
-  'combat-end': { victory: boolean };
+  'combat-end': { victory: boolean; result: 'victory' | 'defeat' | 'flee' };
 }
 
 export interface ChoiceResolution {
@@ -177,11 +177,13 @@ export class World extends EventTarget {
 
   concludeCombat(result: 'victory' | 'defeat' | 'flee', encounter: CombatEncounter): void {
     const toastMessages: ToastMessage[] = [];
+    let outcome: 'victory' | 'defeat' | 'flee' = 'victory';
+
     if (result === 'victory') {
       if (encounter.victoryEffects) {
         this.applyEffects(encounter.victoryEffects, toastMessages);
       }
-      this.emit('combat-end', { victory: true });
+      outcome = 'victory';
       if (encounter.victoryNode) {
         this.setCurrentNode(encounter.victoryNode);
       }
@@ -195,7 +197,7 @@ export class World extends EventTarget {
       if (encounter.defeatEffects) {
         this.applyEffects(encounter.defeatEffects, toastMessages);
       }
-      this.emit('combat-end', { victory: false });
+      outcome = 'defeat';
       toastMessages.push({
         id: `combat-${encounter.id}-defeat`,
         title: 'Defeat',
@@ -206,7 +208,7 @@ export class World extends EventTarget {
         this.setCurrentNode(encounter.fleeNode);
       }
     } else if (result === 'flee') {
-      this.emit('combat-end', { victory: false });
+      outcome = 'flee';
       toastMessages.push({
         id: `combat-${encounter.id}-flee`,
         title: 'Retreat',
@@ -217,6 +219,8 @@ export class World extends EventTarget {
         this.setCurrentNode(encounter.fleeNode);
       }
     }
+
+    this.emit('combat-end', { victory: outcome === 'victory', result: outcome });
 
     toastMessages.forEach((toast) => this.emit('toast', toast));
     this.persist();
