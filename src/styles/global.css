@@ -30,10 +30,47 @@ body {
   display: flex;
   align-items: stretch;
   justify-content: center;
+  position: relative;
+  overflow-x: hidden;
 }
 
 dd-root {
   flex: 1;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: -40vh -30vw auto -30vw;
+  height: 120vh;
+  pointer-events: none;
+  background: radial-gradient(circle at 20% 20%, rgba(242, 125, 114, 0.35), transparent 60%);
+  transform: translateZ(0);
+  animation: ember-drift 18s linear infinite;
+  opacity: 0.4;
+  z-index: -2;
+}
+
+body::after {
+  inset: auto -20vw -40vh -20vw;
+  background: radial-gradient(circle at 80% 60%, rgba(106, 192, 255, 0.3), transparent 70%);
+  animation-duration: 24s;
+  opacity: 0.35;
+}
+
+@keyframes ember-drift {
+  0% {
+    transform: translate3d(-2%, -2%, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(2%, 4%, 0) scale(1.05);
+  }
+
+  100% {
+    transform: translate3d(-2%, -2%, 0) scale(1);
+  }
 }
 
 button {

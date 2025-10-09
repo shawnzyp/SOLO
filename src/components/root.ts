@@ -1,9 +1,17 @@
 import { html, render } from 'lit-html';
 import { createHero, listHeroBackgrounds, listHeroClasses, listHeroRaces } from '../systems/hero';
-import type { StoryChoice, StoryNode, Hero, Quest } from '../systems/types';
-import { World, listAvailableChoices, type ToastMessage } from '../systems/world';
+import type {
+  StoryChoice,
+  StoryNode,
+  Hero,
+  Quest,
+  FactionStanding,
+  Achievement,
+} from '../systems/types';
+import { World, type ToastMessage } from '../systems/world';
 import type { CombatEncounter, WorldState } from '../systems/types';
 import { CombatSession, type CombatSnapshot, type CombatAction } from '../systems/combat';
+import { AudioManager } from '../systems/audio';
 
 import './story-panel';
 import './dialogue-list';
@@ -16,11 +24,15 @@ const HERO_RACES = listHeroRaces();
 const HERO_CLASSES = listHeroClasses();
 const HERO_BACKGROUNDS = listHeroBackgrounds();
 
+type RenderChoice = StoryChoice & { disabled?: boolean };
+
 interface RootState {
   hero: Hero | null;
   node: StoryNode | null;
-  choices: StoryChoice[];
+  choices: RenderChoice[];
   quests: Quest[];
+  factions: FactionStanding[];
+  achievements: Achievement[];
   toasts: ToastMessage[];
   mode: 'creation' | 'story' | 'combat';
   combat: {
@@ -31,12 +43,15 @@ interface RootState {
 
 export class DDRoot extends HTMLElement {
   private world = new World();
+  private audio = new AudioManager();
 
   private state: RootState = {
     hero: null,
     node: null,
     choices: [],
     quests: [],
+    factions: [],
+    achievements: [],
     toasts: [],
     mode: 'creation',
     combat: {
@@ -60,14 +75,21 @@ export class DDRoot extends HTMLElement {
     this.world.addEventListener('state-change', (event) => {
       const detail = (event as CustomEvent<WorldState>).detail;
       const node = this.world.currentNode;
-      const choices = node ? listAvailableChoices(node, this.world) : [];
+      const choices = this.computeChoices(node);
       const quests = Object.values(detail.quests).sort((a, b) => a.title.localeCompare(b.title));
+      const factions = Object.values(detail.factions).sort((a, b) => a.name.localeCompare(b.name));
+      const achievements = Object.values(detail.achievements).sort(
+        (a, b) => b.unlockedAt - a.unlockedAt,
+      );
+      this.audio.setAmbient(detail.ambientTrack);
       this.state = {
         ...this.state,
         hero: detail.hero,
         node,
         choices,
         quests,
+        factions,
+        achievements,
         mode: detail.hero ? (this.state.mode === 'combat' ? 'combat' : 'story') : 'creation',
       };
       this.requestRender();
@@ -75,11 +97,13 @@ export class DDRoot extends HTMLElement {
 
     this.world.addEventListener('toast', (event) => {
       const toast = (event as CustomEvent<ToastMessage>).detail;
+      this.audio.playToastTone(toast.tone);
       this.pushToast(toast);
     });
 
     this.world.addEventListener('combat-start', (event) => {
       const encounter = (event as CustomEvent<CombatEncounter>).detail;
+      this.audio.playCue('combat-start');
       const hero = this.state.hero;
       if (!hero) return;
       this.combatSession = new CombatSession(hero, encounter);
@@ -107,7 +131,17 @@ export class DDRoot extends HTMLElement {
       this.requestRender();
     });
 
-    this.world.addEventListener('combat-end', () => {
+    this.world.addEventListener('combat-end', (event) => {
+      const detail = (
+        event as CustomEvent<{ victory: boolean; result: 'victory' | 'defeat' | 'flee' }>
+      ).detail;
+      if (detail.result === 'victory') {
+        this.audio.playCue('victory');
+      } else if (detail.result === 'defeat') {
+        this.audio.playCue('defeat');
+      } else {
+        this.audio.playCue('flee');
+      }
       this.combatSession = null;
       this.state = {
         ...this.state,
@@ -125,13 +159,18 @@ export class DDRoot extends HTMLElement {
         this.world.restore();
         if (this.world.snapshot.hero) {
           const node = this.world.currentNode;
+          const snapshot = this.world.snapshot;
           this.state = {
             ...this.state,
             mode: 'story',
-            hero: this.world.snapshot.hero,
+            hero: snapshot.hero,
             node,
-            choices: node ? listAvailableChoices(node, this.world) : [],
-            quests: Object.values(this.world.snapshot.quests),
+            choices: this.computeChoices(node),
+            quests: Object.values(snapshot.quests).sort((a, b) => a.title.localeCompare(b.title)),
+            factions: Object.values(snapshot.factions).sort((a, b) => a.name.localeCompare(b.name)),
+            achievements: Object.values(snapshot.achievements).sort(
+              (a, b) => b.unlockedAt - a.unlockedAt,
+            ),
           };
           this.requestRender();
         } else {
@@ -146,11 +185,13 @@ export class DDRoot extends HTMLElement {
   disconnectedCallback(): void {
     this.removeEventListener('choice-selected', this.handleChoiceSelected as EventListener);
     this.removeEventListener('combat-action', this.handleCombatAction as EventListener);
+    this.audio.dispose();
   }
 
   private handleChoiceSelected(event: CustomEvent<{ choice: StoryChoice }>): void {
     event.stopPropagation();
     const { choice } = event.detail;
+    if ((choice as RenderChoice).disabled) return;
     this.world.applyChoice(choice);
   }
 
@@ -214,9 +255,19 @@ export class DDRoot extends HTMLElement {
     form.reset();
   }
 
+  private computeChoices(node: StoryNode | null): RenderChoice[] {
+    if (!node) return [];
+    return node.choices
+      .filter((choice) => !choice.hidden)
+      .map((choice) => ({
+        ...choice,
+        disabled: choice.requirements ? !this.world.checkConditions(choice.requirements) : false,
+      }));
+  }
+
   private requestRender(): void {
     if (!this.shadowRoot) return;
-    const { hero, node, choices, quests, toasts, mode, combat } = this.state;
+    const { hero, node, choices, quests, factions, achievements, toasts, mode, combat } = this.state;
     render(
       html`
         <style>
@@ -342,7 +393,13 @@ export class DDRoot extends HTMLElement {
               : html`<dd-dialogue-list .data=${choices}></dd-dialogue-list>`}
           </main>
           <aside>
-            <dd-character-sheet .data=${hero}></dd-character-sheet>
+            <dd-character-sheet
+              .data=${{
+                hero,
+                factions,
+                achievements,
+              }}
+            ></dd-character-sheet>
             <dd-quest-tracker .data=${quests}></dd-quest-tracker>
           </aside>
         </div>

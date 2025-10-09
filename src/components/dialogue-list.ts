@@ -75,6 +75,7 @@ export class DDDialogueList extends HTMLElement {
             opacity: 0.6;
             cursor: not-allowed;
             filter: grayscale(50%);
+            border-color: rgba(255, 210, 164, 0.12);
           }
 
           .hotkey {
@@ -88,6 +89,22 @@ export class DDDialogueList extends HTMLElement {
             margin-top: 0.25rem;
             font-size: 0.85rem;
             color: var(--dd-muted);
+          }
+
+          .meta,
+          .locked {
+            margin-top: 0.4rem;
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+          }
+
+          .meta {
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          .locked {
+            color: rgba(255, 180, 180, 0.85);
           }
         </style>
         <ul>
@@ -105,6 +122,16 @@ export class DDDialogueList extends HTMLElement {
                   ${choice.description
                     ? html`<div class="description">${choice.description}</div>`
                     : null}
+                  ${choice.skillCheck
+                    ? html`<div class="meta">
+                        ${choice.skillCheck.ability.toUpperCase()} Check · DC
+                        ${choice.skillCheck.difficultyClass}
+                        ${choice.skillCheck.flavor ? html`· ${choice.skillCheck.flavor}` : null}
+                      </div>`
+                    : null}
+                  ${choice.disabled
+                    ? html`<div class="locked">${this.describeRequirements(choice)}</div>`
+                    : null}
                 </button>
               </li>
             `;
@@ -113,6 +140,55 @@ export class DDDialogueList extends HTMLElement {
       `,
       this.shadowRoot,
     );
+  }
+
+  private describeRequirements(choice: DialogueTemplateChoice): string {
+    if (!choice.requirements || choice.requirements.length === 0) {
+      return 'Unavailable right now.';
+    }
+    const segments = choice.requirements.map((requirement) => {
+      const operator = this.describeOperator(requirement.operator);
+      switch (requirement.type) {
+        case 'faction':
+          return `Reputation with ${this.toTitle(requirement.id)} ${operator} ${requirement.value}`;
+        case 'quest':
+          return `Quest “${this.toTitle(requirement.id)}” ${String(requirement.value).toUpperCase()}`;
+        case 'attribute':
+          return `${requirement.id.toUpperCase()} ${operator} ${requirement.value}`;
+        case 'item':
+          return `Requires ${this.toTitle(requirement.id)}`;
+        case 'skill':
+          return `${this.toTitle(requirement.id)} ${operator} ${requirement.value}`;
+        default:
+          return 'Unavailable';
+      }
+    });
+    return segments.join(' · ');
+  }
+
+  private describeOperator(operator?: NonNullable<DialogueTemplateChoice['requirements']>[number]['operator']): string {
+    switch (operator) {
+      case 'gt':
+        return '>';
+      case 'gte':
+      case undefined:
+        return '≥';
+      case 'lt':
+        return '<';
+      case 'lte':
+        return '≤';
+      case 'eq':
+        return '=';
+      default:
+        return '≥';
+    }
+  }
+
+  private toTitle(value: string): string {
+    return value
+      .split(/[-_]/)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
   }
 
   private select(choice: DialogueTemplateChoice): void {
