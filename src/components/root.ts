@@ -7,6 +7,7 @@ import type {
   Quest,
   FactionStanding,
   Achievement,
+  JournalEntry,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
 import type { CombatEncounter, WorldState } from '../systems/types';
@@ -19,6 +20,7 @@ import './character-sheet';
 import './quest-tracker';
 import './combat-hud';
 import './toast-stack';
+import './journal-log';
 
 const HERO_RACES = listHeroRaces();
 const HERO_CLASSES = listHeroClasses();
@@ -39,6 +41,7 @@ interface RootState {
     encounter: CombatEncounter | null;
     snapshot: CombatSnapshot | null;
   };
+  journal: JournalEntry[];
 }
 
 export class DDRoot extends HTMLElement {
@@ -58,6 +61,7 @@ export class DDRoot extends HTMLElement {
       encounter: null,
       snapshot: null,
     },
+    journal: [],
   };
 
   private combatSession: CombatSession | null = null;
@@ -90,6 +94,7 @@ export class DDRoot extends HTMLElement {
         quests,
         factions,
         achievements,
+        journal: [...detail.journal].sort((a, b) => a.timestamp - b.timestamp),
         mode: detail.hero ? (this.state.mode === 'combat' ? 'combat' : 'story') : 'creation',
       };
       this.requestRender();
@@ -171,6 +176,7 @@ export class DDRoot extends HTMLElement {
             achievements: Object.values(snapshot.achievements).sort(
               (a, b) => b.unlockedAt - a.unlockedAt,
             ),
+            journal: [...snapshot.journal].sort((a, b) => a.timestamp - b.timestamp),
           };
           this.requestRender();
         } else {
@@ -267,7 +273,18 @@ export class DDRoot extends HTMLElement {
 
   private requestRender(): void {
     if (!this.shadowRoot) return;
-    const { hero, node, choices, quests, factions, achievements, toasts, mode, combat } = this.state;
+    const {
+      hero,
+      node,
+      choices,
+      quests,
+      factions,
+      achievements,
+      toasts,
+      mode,
+      combat,
+      journal,
+    } = this.state;
     render(
       html`
         <style>
@@ -401,6 +418,7 @@ export class DDRoot extends HTMLElement {
               }}
             ></dd-character-sheet>
             <dd-quest-tracker .data=${quests}></dd-quest-tracker>
+            <dd-journal-log .data=${journal}></dd-journal-log>
           </aside>
         </div>
         <dd-toast-stack .data=${toasts}></dd-toast-stack>
