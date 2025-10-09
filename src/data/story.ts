@@ -55,6 +55,7 @@ export const storyNodes: StoryNode[] = [
     ],
     background: 'linear-gradient(180deg, rgba(39,22,55,0.9), rgba(12,12,28,0.95))',
     ambient: 'audio/ambience-wind.mp3',
+    tags: ['Verdyn Outskirts'],
     choices: [
       {
         id: 'enter-verdyn',
@@ -89,6 +90,7 @@ export const storyNodes: StoryNode[] = [
     ],
     background: 'url(/assets/backgrounds/tavern.jpg)',
     ambient: 'audio/tavern-chatter.mp3',
+    tags: ['Verdyn'],
     choices: [
       {
         id: 'speak-captain',
@@ -143,6 +145,7 @@ export const storyNodes: StoryNode[] = [
     ],
     background: 'linear-gradient(180deg, rgba(35,26,44,0.95), rgba(8,8,18,0.98))',
     ambient: 'audio/whispers.mp3',
+    tags: ['Verdyn', 'Black Guild'],
     choices: [
       {
         id: 'accept-guild-contract',
@@ -186,6 +189,7 @@ export const storyNodes: StoryNode[] = [
     ],
     background: 'url(/assets/backgrounds/forest.jpg)',
     ambient: 'audio/wind-forest.mp3',
+    tags: ['Ember Wilds'],
     choices: [
       {
         id: 'perception-check',
@@ -266,6 +270,7 @@ export const storyNodes: StoryNode[] = [
     background: 'linear-gradient(180deg, rgba(67,28,28,0.9), rgba(18,10,10,0.95))',
     ambient: 'audio/combat-drums.mp3',
     onEnter: [{ type: 'log', entry: 'Combat initiated: Goblin Scout.' }],
+    tags: ['Ember Wilds', 'Combat Encounter'],
     choices: [
       {
         id: 'fight',
@@ -288,6 +293,7 @@ export const storyNodes: StoryNode[] = [
       'The goblin introduces himself as Skritch, a scout fleeing from warped chieftains. He offers to trade knowledge for safe passage.',
     ],
     background: 'linear-gradient(180deg, rgba(26,44,35,0.9), rgba(8,18,12,0.95))',
+    tags: ['Ember Wilds', 'Allies'],
     choices: [
       {
         id: 'trade-info',
@@ -324,6 +330,7 @@ export const storyNodes: StoryNode[] = [
     ],
     background: 'url(/assets/backgrounds/gate.jpg)',
     ambient: 'audio/arcane-hum.mp3',
+    tags: ['Ember Rift', 'Ancient Ruins'],
     choices: [
       {
         id: 'use-shard',
@@ -382,6 +389,7 @@ export const storyNodes: StoryNode[] = [
     ],
     background: 'linear-gradient(180deg, rgba(62,14,46,0.95), rgba(8,6,12,0.95))',
     ambient: 'audio/epic-rise.mp3',
+    tags: ['Ember Rift', 'Threshold'],
     choices: [
       {
         id: 'enter-rift',

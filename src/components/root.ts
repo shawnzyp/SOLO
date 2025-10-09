@@ -8,6 +8,7 @@ import type {
   FactionStanding,
   Achievement,
   JournalEntry,
+  DiscoveredNode,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
 import type { CombatEncounter, WorldState } from '../systems/types';
@@ -21,12 +22,15 @@ import './quest-tracker';
 import './combat-hud';
 import './toast-stack';
 import './journal-log';
+import './node-map';
 
 const HERO_RACES = listHeroRaces();
 const HERO_CLASSES = listHeroClasses();
 const HERO_BACKGROUNDS = listHeroBackgrounds();
 
 type RenderChoice = StoryChoice & { disabled?: boolean };
+
+type MapNode = DiscoveredNode & { isCurrent: boolean };
 
 interface RootState {
   hero: Hero | null;
@@ -42,6 +46,7 @@ interface RootState {
     snapshot: CombatSnapshot | null;
   };
   journal: JournalEntry[];
+  mapNodes: MapNode[];
 }
 
 export class DDRoot extends HTMLElement {
@@ -62,6 +67,7 @@ export class DDRoot extends HTMLElement {
       snapshot: null,
     },
     journal: [],
+    mapNodes: [],
   };
 
   private combatSession: CombatSession | null = null;
@@ -86,6 +92,12 @@ export class DDRoot extends HTMLElement {
         (a, b) => b.unlockedAt - a.unlockedAt,
       );
       this.audio.setAmbient(detail.ambientTrack);
+      const mapNodes = Object.values(detail.discoveredNodes ?? {})
+        .sort((a, b) => a.firstVisitedAt - b.firstVisitedAt)
+        .map((entry) => ({
+          ...entry,
+          isCurrent: entry.id === detail.currentNodeId,
+        }));
       this.state = {
         ...this.state,
         hero: detail.hero,
@@ -96,6 +108,7 @@ export class DDRoot extends HTMLElement {
         achievements,
         journal: [...detail.journal].sort((a, b) => a.timestamp - b.timestamp),
         mode: detail.hero ? (this.state.mode === 'combat' ? 'combat' : 'story') : 'creation',
+        mapNodes,
       };
       this.requestRender();
     });
@@ -165,6 +178,12 @@ export class DDRoot extends HTMLElement {
         if (this.world.snapshot.hero) {
           const node = this.world.currentNode;
           const snapshot = this.world.snapshot;
+          const mapNodes = Object.values(snapshot.discoveredNodes ?? {})
+            .sort((a, b) => a.firstVisitedAt - b.firstVisitedAt)
+            .map((entry) => ({
+              ...entry,
+              isCurrent: entry.id === snapshot.currentNodeId,
+            }));
           this.state = {
             ...this.state,
             mode: 'story',
@@ -177,6 +196,7 @@ export class DDRoot extends HTMLElement {
               (a, b) => b.unlockedAt - a.unlockedAt,
             ),
             journal: [...snapshot.journal].sort((a, b) => a.timestamp - b.timestamp),
+            mapNodes,
           };
           this.requestRender();
         } else {
@@ -284,6 +304,7 @@ export class DDRoot extends HTMLElement {
       mode,
       combat,
       journal,
+      mapNodes,
     } = this.state;
     render(
       html`
@@ -417,6 +438,7 @@ export class DDRoot extends HTMLElement {
                 achievements,
               }}
             ></dd-character-sheet>
+            <dd-node-map .data=${mapNodes}></dd-node-map>
             <dd-quest-tracker .data=${quests}></dd-quest-tracker>
             <dd-journal-log .data=${journal}></dd-journal-log>
           </aside>

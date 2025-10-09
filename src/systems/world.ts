@@ -13,6 +13,7 @@ import type {
   StoryChoice,
   StoryNode,
   WorldState,
+  DiscoveredNode,
 } from './types';
 import { storyNodes, getNodeById } from '../data/story';
 
@@ -57,6 +58,7 @@ export class World extends EventTarget {
     journal: [],
     currentNodeId: null,
     ambientTrack: undefined,
+    discoveredNodes: {},
   };
 
   constructor() {
@@ -77,6 +79,9 @@ export class World extends EventTarget {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as WorldState;
+      if (!parsed.discoveredNodes) {
+        parsed.discoveredNodes = {};
+      }
       this.state = parsed;
       this.emit('state-change', this.snapshot);
     } catch (error) {
@@ -91,6 +96,7 @@ export class World extends EventTarget {
     this.state.achievements = {};
     this.state.factions = buildInitialFactions();
     this.state.ambientTrack = undefined;
+    this.state.discoveredNodes = {};
     this.state.currentNodeId = null;
     this.addJournalEntry(
       `${hero.name}, a ${hero.race} ${hero.heroClass.name}, vows to walk the Ember Road alone.`,
@@ -248,16 +254,32 @@ export class World extends EventTarget {
 
   setCurrentNode(nodeId: string): void {
     this.state.currentNodeId = nodeId;
-    const node = getNodeById(nodeId);
-    if (node?.onEnter) {
-      const toastMessages: ToastMessage[] = [];
-      this.applyEffects(node.onEnter, toastMessages);
-      toastMessages.forEach((toast) => this.emit('toast', toast));
+    const toastMessages: ToastMessage[] = [];
+    const initialNode = getNodeById(nodeId);
+
+    if (initialNode?.onEnter) {
+      this.applyEffects(initialNode.onEnter, toastMessages);
     }
-    if (node?.ambient) {
-      this.applyEffects([{ type: 'setAmbient', track: node.ambient }], []);
+
+    const finalNodeId = this.state.currentNodeId ?? nodeId;
+    const finalNode = finalNodeId ? getNodeById(finalNodeId) : initialNode;
+    const discovery = finalNodeId ? this.trackDiscoveredNode(finalNodeId) : null;
+    if (discovery?.isNew && finalNode) {
+      toastMessages.push({
+        id: `discover-${finalNode.id}-${Date.now()}`,
+        title: 'New Location Unlocked',
+        body: finalNode.title,
+        tone: 'info',
+      });
     }
-    this.addJournalEntry(`Arrived at ${node?.title ?? 'an unknown location'}.`);
+
+    if (finalNode?.ambient) {
+      this.applyEffects([{ type: 'setAmbient', track: finalNode.ambient }], toastMessages);
+    }
+
+    toastMessages.forEach((toast) => this.emit('toast', toast));
+
+    this.addJournalEntry(`Arrived at ${finalNode?.title ?? 'an unknown location'}.`);
     this.persist();
     this.emit('state-change', this.snapshot);
   }
@@ -307,6 +329,32 @@ export class World extends EventTarget {
       default:
         return false;
     }
+  }
+
+  private trackDiscoveredNode(nodeId: string): { entry: DiscoveredNode; isNew: boolean } | null {
+    const node = getNodeById(nodeId);
+    if (!node) return null;
+
+    const timestamp = Date.now();
+    const existing = this.state.discoveredNodes[nodeId];
+    if (existing) {
+      existing.lastVisitedAt = timestamp;
+      existing.visits += 1;
+      return { entry: existing, isNew: false };
+    }
+
+    const entry: DiscoveredNode = {
+      id: node.id,
+      title: node.title,
+      summary: node.summary,
+      tags: node.tags ? [...node.tags] : undefined,
+      firstVisitedAt: timestamp,
+      lastVisitedAt: timestamp,
+      visits: 1,
+    };
+
+    this.state.discoveredNodes[nodeId] = entry;
+    return { entry, isNew: true };
   }
 
   private applyEffects(effects: Effect[], toastMessages: ToastMessage[]): void {
@@ -490,6 +538,7 @@ export function resetWorld(world: World): void {
     journal: [],
     currentNodeId: null,
     ambientTrack: undefined,
+    discoveredNodes: {},
   };
   (world as unknown as { state: WorldState }).state = blank;
   world.dispatchEvent(new CustomEvent('state-change', { detail: world.snapshot }));
