@@ -3,20 +3,44 @@ import type { StoryNode } from '../systems/types';
 
 export class DDStoryPanel extends HTMLElement {
   private node: StoryNode | null = null;
+  private typedParagraphs: string[] = [];
+  private typingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private activeParagraphIndex = 0;
+  private isTyping = false;
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
   }
 
+  disconnectedCallback(): void {
+    this.stopTyping();
+  }
+
   set data(node: StoryNode | null) {
+    const previousId = this.node?.id ?? null;
     this.node = node;
-    this.update();
+    if (!node) {
+      this.stopTyping();
+      this.typedParagraphs = [];
+      this.update();
+      return;
+    }
+
+    if (node.id !== previousId) {
+      this.startTypewriter();
+    } else {
+      this.update();
+    }
   }
 
   private update(): void {
     if (!this.shadowRoot) return;
     const node = this.node;
+    const paragraphs =
+      this.typedParagraphs.length > 0
+        ? this.typedParagraphs
+        : node?.body ?? [];
     render(
       html`
         <style>
@@ -71,6 +95,13 @@ export class DDStoryPanel extends HTMLElement {
             margin-bottom: 0;
           }
 
+          .body p.typing::after {
+            content: '▌';
+            margin-left: 0.2rem;
+            animation: blink 1.2s steps(2, start) infinite;
+            opacity: 0.85;
+          }
+
           @keyframes fade-in {
             from {
               opacity: 0;
@@ -80,6 +111,18 @@ export class DDStoryPanel extends HTMLElement {
             to {
               opacity: 1;
               transform: translateY(0);
+            }
+          }
+
+          @keyframes blink {
+            0%,
+            49% {
+              opacity: 1;
+            }
+
+            50%,
+            100% {
+              opacity: 0;
             }
           }
 
@@ -100,13 +143,95 @@ export class DDStoryPanel extends HTMLElement {
                 <p class="summary">${node.summary}</p>
               </header>
               <div class="body">
-                ${node.body.map((paragraph) => html`<p>${paragraph}</p>`) ?? ''}
+                ${paragraphs.map(
+                  (paragraph, index) => html`
+                    <p class=${this.isTyping && index === this.activeParagraphIndex ? 'typing' : ''}>
+                      ${paragraph}
+                    </p>
+                  `,
+                )}
               </div>
             `
           : html`<p>Awaiting the first lines of your chronicle...</p>`}
       `,
       this.shadowRoot,
     );
+
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => {
+        const container = this.shadowRoot?.querySelector('.body');
+        if (container instanceof HTMLElement) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
+    }
+  }
+
+  private startTypewriter(): void {
+    this.stopTyping();
+    const node = this.node;
+    if (!node || node.body.length === 0) {
+      this.typedParagraphs = node?.body ?? [];
+      this.update();
+      return;
+    }
+
+    this.typedParagraphs = node.body.map(() => '');
+    this.activeParagraphIndex = 0;
+    this.isTyping = true;
+    this.update();
+    this.queueNextCharacter();
+  }
+
+  private queueNextCharacter(): void {
+    if (!this.isTyping) return;
+    const node = this.node;
+    if (!node) {
+      this.completeTyping();
+      return;
+    }
+
+    const paragraph = node.body[this.activeParagraphIndex];
+    if (paragraph === undefined) {
+      this.completeTyping();
+      return;
+    }
+
+    const currentLength = this.typedParagraphs[this.activeParagraphIndex]?.length ?? 0;
+    if (currentLength < paragraph.length) {
+      const nextLength = currentLength + 1;
+      this.typedParagraphs[this.activeParagraphIndex] = paragraph.slice(0, nextLength);
+      this.update();
+      const lastChar = paragraph.charAt(nextLength - 1);
+      const delay = lastChar.trim().length === 0 ? 28 : 48;
+      this.typingTimeout = setTimeout(() => this.queueNextCharacter(), delay);
+    } else {
+      this.activeParagraphIndex += 1;
+      if (this.activeParagraphIndex >= node.body.length) {
+        this.completeTyping();
+      } else {
+        this.typingTimeout = setTimeout(() => this.queueNextCharacter(), 320);
+      }
+    }
+  }
+
+  private completeTyping(): void {
+    const node = this.node;
+    this.stopTyping();
+    if (node) {
+      this.typedParagraphs = [...node.body];
+    } else {
+      this.typedParagraphs = [];
+    }
+    this.update();
+  }
+
+  private stopTyping(): void {
+    if (this.typingTimeout !== null) {
+      clearTimeout(this.typingTimeout);
+      this.typingTimeout = null;
+    }
+    this.isTyping = false;
   }
 }
 
