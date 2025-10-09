@@ -1,0 +1,20 @@
+<section class="combat-hud" aria-label="Combat heads-up display">
+  <div class="combat-hud__turn-order" aria-label="Turn order" role="list">
+    <div role="listitem" class="combat-hud__turn is-active">Mira</div>
+    <div role="listitem" class="combat-hud__turn">Sable Warden</div>
+    <div role="listitem" class="combat-hud__turn">Runecaller</div>
+  </div>
+  <div class="combat-hud__action-bar" role="group" aria-label="Action bar">
+    <button class="btn" data-sound="click">Smite</button>
+    <button class="btn btn-ghost">Guard</button>
+    <button class="btn btn-ghost">Channel</button>
+    <button class="btn btn-danger">Retreat</button>
+  </div>
+  <div class="combat-hud__enemy">
+    <div class="combat-hud__enemy-name">Sable Warden</div>
+    <div class="combat-hud__enemy-health" role="progressbar" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100">
+      <span style="width:68%"></span>
+    </div>
+  </div>
+  <div class="combat-hud__floaters" aria-live="assertive"></div>
+</section>

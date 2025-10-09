@@ -1,0 +1,53 @@
+{
+  "click": {
+    "duration": 0.18,
+    "envelope": { "attack": 0.006, "decay": 0.08, "sustain": 0.3, "release": 0.12 },
+    "oscillators": [
+      { "type": "square", "frequency": [680, 360], "duration": 0.12, "gain": 0.45 },
+      { "type": "triangle", "frequency": 180, "duration": 0.18, "gain": 0.2, "delay": 0.02 }
+    ]
+  },
+  "confirm": {
+    "duration": 0.6,
+    "envelope": { "attack": 0.02, "decay": 0.18, "sustain": 0.4, "release": 0.22 },
+    "oscillators": [
+      { "type": "sine", "frequency": [520, 660], "duration": 0.6, "gain": 0.36 },
+      { "type": "triangle", "frequency": [820, 960], "duration": 0.4, "gain": 0.24, "delay": 0.08 },
+      { "type": "sine", "frequency": 660, "duration": 0.32, "gain": 0.18, "delay": 0.24 }
+    ]
+  },
+  "error": {
+    "duration": 0.42,
+    "envelope": { "attack": 0.008, "decay": 0.12, "sustain": 0.2, "release": 0.24 },
+    "oscillators": [
+      { "type": "sawtooth", "frequency": [160, 120], "duration": 0.42, "gain": 0.32 },
+      { "type": "triangle", "frequency": 90, "duration": 0.32, "gain": 0.22 }
+    ]
+  },
+  "achievement": {
+    "duration": 0.9,
+    "envelope": { "attack": 0.018, "decay": 0.22, "sustain": 0.5, "release": 0.4 },
+    "oscillators": [
+      { "type": "sine", "frequency": [620, 880, 1040], "duration": 0.9, "gain": 0.28 },
+      { "type": "triangle", "frequency": [1240, 1480], "duration": 0.6, "gain": 0.2, "delay": 0.12 },
+      { "type": "square", "frequency": 660, "duration": 0.4, "gain": 0.16, "delay": 0.18 }
+    ]
+  },
+  "page": {
+    "duration": 0.5,
+    "envelope": { "attack": 0.012, "decay": 0.16, "sustain": 0.35, "release": 0.24 },
+    "oscillators": [
+      { "type": "triangle", "frequency": [340, 420, 360], "duration": 0.5, "gain": 0.24 },
+      { "type": "sine", "frequency": 240, "duration": 0.32, "gain": 0.18, "delay": 0.08 }
+    ]
+  },
+  "quest": {
+    "duration": 0.7,
+    "envelope": { "attack": 0.016, "decay": 0.18, "sustain": 0.4, "release": 0.28 },
+    "oscillators": [
+      { "type": "triangle", "frequency": [420, 560, 480], "duration": 0.7, "gain": 0.28 },
+      { "type": "sine", "frequency": [720, 860], "duration": 0.46, "gain": 0.2, "delay": 0.1 },
+      { "type": "square", "frequency": 360, "duration": 0.24, "gain": 0.16, "delay": 0.24 }
+    ]
+  }
+}

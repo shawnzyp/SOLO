@@ -1,0 +1,35 @@
+.achievement-demo {
+  display: grid;
+  gap: var(--space-md);
+  position: relative;
+}
+
+.achievement {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: var(--border-gold);
+  background: color-mix(in srgb, var(--color-surface-2), rgba(255,255,255,0.04));
+  box-shadow: var(--shadow-high);
+  animation: achievement-pop 480ms ease;
+}
+
+.achievement__badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), rgba(200,162,74,0.2));
+}
+
+.achievement__icon {
+  font-size: 2rem;
+  color: var(--color-accent);
+}
+
+.achievement[hidden] {
+  display: none;
+}

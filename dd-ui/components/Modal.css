@@ -1,0 +1,45 @@
+.modal[hidden] {
+  display: none;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 15, 19, 0.75);
+  backdrop-filter: blur(6px);
+}
+
+.modal__dialog {
+  position: relative;
+  max-width: 420px;
+  width: min(90vw, 480px);
+  background: color-mix(in srgb, var(--color-surface-1), rgba(0,0,0,0.35));
+  border: var(--border-gold);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  display: grid;
+  gap: var(--space-lg);
+  box-shadow: var(--shadow-high);
+  animation: menu-slide 220ms ease;
+}
+
+.modal__header,
+.modal__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.modal__body {
+  display: grid;
+  gap: var(--space-md);
+}

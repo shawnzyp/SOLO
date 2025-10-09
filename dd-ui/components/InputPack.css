@@ -1,0 +1,52 @@
+.input-pack {
+  display: grid;
+  gap: var(--space-lg);
+  max-width: 480px;
+}
+
+.input-pack label,
+.input-pack fieldset {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.input-pack span {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.check,
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.9rem;
+}
+
+.segmented {
+  display: inline-flex;
+  background: color-mix(in srgb, var(--color-surface-1), rgba(255,255,255,0.04));
+  border-radius: var(--radius-pill);
+  border: var(--border-hairline);
+  padding: 4px;
+  gap: 4px;
+}
+
+.segmented__option {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.segmented__option.is-selected {
+  background: color-mix(in srgb, var(--color-accent), rgba(14,15,19,0.85) 60%);
+  color: var(--color-primary-contrast);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+}

@@ -1,0 +1,83 @@
+.combat-hud {
+  display: grid;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  border: var(--border-gold);
+  background: linear-gradient(180deg, rgba(14,15,19,0.9), rgba(14,15,19,0.6));
+  position: relative;
+  overflow: hidden;
+}
+
+.combat-hud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(200,162,74,0.18), transparent 60%);
+  pointer-events: none;
+}
+
+.combat-hud__turn-order {
+  display: inline-flex;
+  gap: var(--space-sm);
+}
+
+.combat-hud__turn {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: var(--border-hairline);
+  background: rgba(255,255,255,0.06);
+  font-weight: 600;
+}
+
+.combat-hud__turn.is-active {
+  border: var(--border-gold);
+  background: color-mix(in srgb, var(--color-accent), rgba(14,15,19,0.75) 40%);
+}
+
+.combat-hud__action-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-sm);
+}
+
+.combat-hud__enemy {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.combat-hud__enemy-name {
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.combat-hud__enemy-health {
+  position: relative;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  border: var(--border-hairline);
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.combat-hud__enemy-health span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #B33A3A, #C8A24A);
+}
+
+.combat-hud__floaters {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.combat-hud__floater {
+  position: absolute;
+  left: 50%;
+  animation: achievement-pop 600ms ease;
+  transform: translateX(-50%);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+}

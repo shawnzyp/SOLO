@@ -1,0 +1,27 @@
+<section class="menu-system" data-component="menu-system">
+  <div class="menu-system__title" role="banner">
+    <h1>Dragon's Ledger</h1>
+    <p>Solo Adventures Await</p>
+  </div>
+  <div class="menu-system__background" role="img" aria-label="Forest glade backdrop"></div>
+  <nav class="menu-system__main" aria-label="Main menu">
+    <ul>
+      <li><button class="menu-item" data-action="continue">Continue</button></li>
+      <li><button class="menu-item" data-action="new">New Game</button></li>
+      <li><button class="menu-item" data-action="options" data-modal-open="options">Options</button></li>
+      <li><button class="menu-item" data-action="codex">Codex</button></li>
+      <li><button class="menu-item" data-action="quit">Quit</button></li>
+    </ul>
+  </nav>
+  <div class="menu-system__footer">
+    <button class="btn btn-ghost" data-command-palette>Command Palette (Ctrl+P)</button>
+  </div>
+  <div class="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" hidden>
+    <input type="text" placeholder="Search actions" aria-label="Command search" />
+    <ul role="listbox" aria-label="Quick actions">
+      <li role="option">Open Character Sheet</li>
+      <li role="option">Jump to Journal</li>
+      <li role="option">Toggle High Contrast</li>
+    </ul>
+  </div>
+</section>

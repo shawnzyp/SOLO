@@ -1,0 +1,147 @@
+{
+  "castle": {
+    "title": "Castle Study",
+    "description": "Candlelit stone walls, vellum charts, and brass glints.",
+    "hero": [
+      "radial-gradient(circle at 18% 22%, rgba(200,162,74,0.32), transparent 60%)",
+      "radial-gradient(circle at 78% 12%, rgba(62,165,227,0.18), transparent 58%)",
+      "linear-gradient(180deg, rgba(14,15,19,0.94), rgba(32,35,43,0.76))",
+      "repeating-linear-gradient(45deg, rgba(233,225,207,0.06) 0 18px, transparent 18px 36px)"
+    ],
+    "parallax": [
+      [
+        "linear-gradient(180deg, rgba(14,15,19,0.82), rgba(32,35,43,0.62))",
+        "radial-gradient(circle at 82% 18%, rgba(141,107,209,0.28), transparent 68%)"
+      ],
+      [
+        "radial-gradient(circle at 32% 74%, rgba(200,162,74,0.42), transparent 56%)",
+        "linear-gradient(210deg, rgba(179,58,58,0.38), transparent)"
+      ]
+    ],
+    "tile": [
+      "repeating-linear-gradient(90deg, rgba(233,225,207,0.12) 0 22px, transparent 22px 44px)",
+      "repeating-linear-gradient(0deg, rgba(14,15,19,0.24) 0 12px, transparent 12px 24px)",
+      "radial-gradient(circle at 16% 18%, rgba(200,162,74,0.16), transparent 46%)"
+    ]
+  },
+  "forest": {
+    "title": "Forest Glade",
+    "description": "Bioluminescent motes swirling through lush greens.",
+    "hero": [
+      "radial-gradient(circle at 28% 18%, rgba(75,163,109,0.42), transparent 58%)",
+      "radial-gradient(circle at 74% 26%, rgba(62,165,227,0.26), transparent 62%)",
+      "linear-gradient(180deg, rgba(14,23,19,0.92), rgba(20,28,24,0.7))"
+    ],
+    "parallax": [
+      [
+        "linear-gradient(180deg, rgba(24,48,34,0.82), rgba(12,20,16,0.6))",
+        "radial-gradient(circle at 82% 28%, rgba(141,107,209,0.28), transparent 68%)"
+      ],
+      [
+        "radial-gradient(circle at 22% 78%, rgba(62,165,227,0.32), transparent 60%)",
+        "linear-gradient(160deg, rgba(75,163,109,0.44), transparent)"
+      ]
+    ],
+    "tile": [
+      "repeating-conic-gradient(from 30deg, rgba(75,163,109,0.16) 0 20deg, transparent 20deg 40deg)",
+      "radial-gradient(circle at 14% 16%, rgba(62,165,227,0.18), transparent 48%)",
+      "linear-gradient(180deg, rgba(12,20,16,0.85), rgba(12,20,16,0.6))"
+    ]
+  },
+  "dungeon": {
+    "title": "Dungeon Stone",
+    "description": "Mossy stone blocks, damp fog, and iron chains.",
+    "hero": [
+      "linear-gradient(180deg, rgba(14,15,19,0.94), rgba(32,35,43,0.68))",
+      "radial-gradient(circle at 68% 30%, rgba(141,107,209,0.22), transparent 60%)",
+      "repeating-linear-gradient(135deg, rgba(20,23,31,0.4) 0 24px, transparent 24px 48px)"
+    ],
+    "parallax": [
+      [
+        "linear-gradient(180deg, rgba(20,23,31,0.92), rgba(12,14,19,0.68))",
+        "radial-gradient(circle at 18% 74%, rgba(75,163,109,0.32), transparent 56%)"
+      ],
+      [
+        "radial-gradient(circle at 76% 32%, rgba(179,58,58,0.36), transparent 60%)",
+        "linear-gradient(200deg, rgba(110,116,130,0.4), transparent)"
+      ]
+    ],
+    "tile": [
+      "repeating-linear-gradient(90deg, rgba(32,35,43,0.42) 0 18px, transparent 18px 36px)",
+      "repeating-linear-gradient(0deg, rgba(12,14,19,0.32) 0 18px, transparent 18px 36px)",
+      "radial-gradient(circle at 30% 22%, rgba(75,163,109,0.2), transparent 46%)"
+    ]
+  },
+  "library": {
+    "title": "Arcane Library",
+    "description": "Floating runes, gilded shelves, and arcane glow.",
+    "hero": [
+      "radial-gradient(circle at 32% 18%, rgba(200,162,74,0.36), transparent 58%)",
+      "radial-gradient(circle at 72% 26%, rgba(141,107,209,0.32), transparent 64%)",
+      "linear-gradient(180deg, rgba(18,16,28,0.94), rgba(36,30,54,0.72))"
+    ],
+    "parallax": [
+      [
+        "linear-gradient(180deg, rgba(36,30,54,0.86), rgba(18,16,28,0.64))",
+        "radial-gradient(circle at 78% 32%, rgba(62,165,227,0.24), transparent 66%)"
+      ],
+      [
+        "radial-gradient(circle at 26% 72%, rgba(200,162,74,0.4), transparent 58%)",
+        "linear-gradient(210deg, rgba(141,107,209,0.34), transparent)"
+      ]
+    ],
+    "tile": [
+      "repeating-linear-gradient(120deg, rgba(200,162,74,0.16) 0 14px, transparent 14px 28px)",
+      "linear-gradient(180deg, rgba(18,16,28,0.92), rgba(36,30,54,0.74))",
+      "radial-gradient(circle at 16% 20%, rgba(141,107,209,0.22), transparent 48%)"
+    ]
+  },
+  "desert": {
+    "title": "Desert Ruin",
+    "description": "Heat shimmer, wind-carved stone, and sun-bleached relics.",
+    "hero": [
+      "linear-gradient(180deg, rgba(179,58,58,0.18), rgba(200,162,74,0.32))",
+      "radial-gradient(circle at 68% 22%, rgba(62,165,227,0.2), transparent 62%)",
+      "linear-gradient(180deg, rgba(32,24,12,0.85), rgba(32,24,12,0.6))"
+    ],
+    "parallax": [
+      [
+        "linear-gradient(180deg, rgba(48,32,18,0.82), rgba(24,16,10,0.62))",
+        "radial-gradient(circle at 18% 68%, rgba(200,162,74,0.42), transparent 58%)"
+      ],
+      [
+        "radial-gradient(circle at 82% 32%, rgba(62,165,227,0.28), transparent 60%)",
+        "linear-gradient(210deg, rgba(179,58,58,0.32), transparent)"
+      ]
+    ],
+    "tile": [
+      "repeating-linear-gradient(160deg, rgba(200,162,74,0.2) 0 24px, transparent 24px 48px)",
+      "repeating-linear-gradient(0deg, rgba(110,116,130,0.16) 0 18px, transparent 18px 36px)",
+      "radial-gradient(circle at 20% 24%, rgba(179,58,58,0.22), transparent 52%)"
+    ]
+  },
+  "snow": {
+    "title": "Snowbound Pass",
+    "description": "Aurora haze over frosted crags and drifting snow.",
+    "hero": [
+      "radial-gradient(circle at 28% 16%, rgba(62,165,227,0.36), transparent 62%)",
+      "radial-gradient(circle at 72% 24%, rgba(141,107,209,0.28), transparent 64%)",
+      "linear-gradient(180deg, rgba(14,19,28,0.94), rgba(26,32,42,0.7))"
+    ],
+    "parallax": [
+      [
+        "linear-gradient(180deg, rgba(26,32,42,0.86), rgba(14,19,28,0.62))",
+        "radial-gradient(circle at 78% 32%, rgba(62,165,227,0.28), transparent 66%)"
+      ],
+      [
+        "radial-gradient(circle at 24% 78%, rgba(141,107,209,0.34), transparent 58%)",
+        "linear-gradient(200deg, rgba(233,225,207,0.2), transparent)"
+      ]
+    ],
+    "tile": [
+      "repeating-linear-gradient(140deg, rgba(62,165,227,0.18) 0 18px, transparent 18px 36px)",
+      "linear-gradient(180deg, rgba(14,19,28,0.92), rgba(26,32,42,0.68))",
+      "radial-gradient(circle at 18% 24%, rgba(141,107,209,0.26), transparent 50%)"
+    ]
+  }
+}

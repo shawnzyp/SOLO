@@ -1,0 +1,29 @@
+.accordion {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 520px;
+}
+
+.accordion__trigger {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-md) var(--space-lg);
+  background: color-mix(in srgb, var(--color-surface-1), rgba(255,255,255,0.06));
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.accordion__panel {
+  padding: var(--space-md) var(--space-lg);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-0), rgba(255,255,255,0.04));
+  display: none;
+}
+
+.accordion__panel.is-open {
+  display: block;
+}

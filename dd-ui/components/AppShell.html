@@ -1,0 +1,24 @@
+<section class="app-shell" aria-label="App layout shell">
+  <header class="app-shell__header" role="banner">
+    <div class="logo" aria-label="Dragon's Ledger">
+      <span class="logo__mark" aria-hidden="true">⚔</span>
+      <span class="logo__text">Dragon's Ledger</span>
+    </div>
+    <button class="btn btn-ghost app-shell__menu-toggle" aria-controls="primary-nav" aria-expanded="false">Menu</button>
+  </header>
+  <nav class="app-shell__nav" id="primary-nav" aria-label="Primary">
+    <ul>
+      <li><a class="nav-link" href="#" aria-current="page">Dashboard</a></li>
+      <li><a class="nav-link" href="#character">Character</a></li>
+      <li><a class="nav-link" href="#quests">Quests</a></li>
+      <li><a class="nav-link" href="#codex">Codex</a></li>
+      <li><a class="nav-link" href="#map">Map</a></li>
+    </ul>
+  </nav>
+  <main class="app-shell__content" role="main">
+    <slot name="content">Place application content here.</slot>
+  </main>
+  <footer class="app-shell__footer" role="contentinfo">
+    <small>© 1492 DR Dragon's Ledger. All rights reserved.</small>
+  </footer>
+</section>

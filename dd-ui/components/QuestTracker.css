@@ -1,0 +1,56 @@
+.quest-tracker {
+  background: color-mix(in srgb, var(--color-surface-1), rgba(0,0,0,0.3));
+  border-radius: var(--radius-lg);
+  border: var(--border-gold);
+  padding: var(--space-xl);
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.quest-tracker__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.quest-tracker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.quest-tracker__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: var(--border-hairline);
+  background: color-mix(in srgb, var(--color-surface-0), rgba(255,255,255,0.04));
+}
+
+.quest-tracker__status {
+  align-self: center;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quest-tracker__status[data-state="progress"] {
+  background: rgba(62,165,227,0.15);
+  color: var(--color-info);
+}
+
+.quest-tracker__status[data-state="ready"] {
+  background: rgba(200,162,74,0.15);
+  color: var(--color-accent);
+}
+
+.quest-tracker__status[data-state="new"] {
+  background: rgba(75,163,109,0.18);
+  color: var(--color-success);
+}

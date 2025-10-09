@@ -1,0 +1,38 @@
+<form class="input-pack" aria-label="Character creation form">
+  <label>
+    <span>Adventurer Name</span>
+    <input type="text" name="name" placeholder="Lady Mira" required />
+  </label>
+  <label>
+    <span>Level</span>
+    <input type="number" name="level" min="1" value="5" />
+  </label>
+  <label>
+    <span>Class</span>
+    <select name="class">
+      <option>Paladin</option>
+      <option>Ranger</option>
+      <option>Wizard</option>
+      <option>Bard</option>
+    </select>
+  </label>
+  <fieldset>
+    <legend>Favors</legend>
+    <label class="check"><input type="checkbox" name="favor" value="guild" checked /> Guild Patronage</label>
+    <label class="check"><input type="checkbox" name="favor" value="spirits" /> Spirits' Blessing</label>
+  </fieldset>
+  <fieldset>
+    <legend>Alignment</legend>
+    <label class="radio"><input type="radio" name="alignment" value="lawful" checked /> Lawful Good</label>
+    <label class="radio"><input type="radio" name="alignment" value="neutral" /> True Neutral</label>
+  </fieldset>
+  <label>
+    <span>Resolve</span>
+    <input type="range" name="resolve" min="0" max="100" value="72" />
+  </label>
+  <div class="segmented" role="radiogroup" aria-label="Stance">
+    <button type="button" class="segmented__option is-selected" data-value="attack">Attack</button>
+    <button type="button" class="segmented__option" data-value="defend">Defend</button>
+    <button type="button" class="segmented__option" data-value="support">Support</button>
+  </div>
+</form>

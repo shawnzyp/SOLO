@@ -1,0 +1,42 @@
+.dialogue {
+  background: color-mix(in srgb, var(--color-surface-2), rgba(0,0,0,0.35));
+  border: var(--border-gold);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-high);
+  display: grid;
+  gap: var(--space-md);
+}
+
+.dialogue__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.dialogue__line {
+  font-size: 1.05rem;
+  font-style: italic;
+}
+
+.dialogue__choices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.dialogue__choices [role="option"] {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: var(--border-hairline);
+  cursor: pointer;
+  outline: none;
+}
+
+.dialogue__choices [role="option"][aria-selected="true"] {
+  border: var(--border-gold);
+  background: color-mix(in srgb, var(--color-accent), rgba(14,15,19,0.8) 50%);
+}

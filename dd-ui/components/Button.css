@@ -1,0 +1,10 @@
+.button-demo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.button-demo .btn {
+  min-width: 160px;
+  animation: btn-press 320ms ease;
+}

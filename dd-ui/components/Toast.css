@@ -1,0 +1,28 @@
+.toast-region {
+  position: relative;
+}
+
+.toast-stack {
+  position: fixed;
+  inset: auto 24px 24px auto;
+  display: grid;
+  gap: var(--space-sm);
+  min-width: 280px;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.toast {
+  background: color-mix(in srgb, var(--color-surface-2), rgba(255,255,255,0.04));
+  border: var(--border-gold);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  display: grid;
+  gap: 4px;
+  box-shadow: var(--shadow-high);
+  animation: toast-enter 260ms ease forwards;
+}
+
+.toast--exit {
+  animation: toast-exit 200ms ease forwards;
+}

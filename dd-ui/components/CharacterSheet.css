@@ -1,0 +1,63 @@
+.character-sheet {
+  background: color-mix(in srgb, var(--color-surface-2), rgba(0,0,0,0.4));
+  border-radius: var(--radius-lg);
+  border: var(--border-gold);
+  padding: var(--space-2xl);
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.character-sheet__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.character-sheet__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-xl);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.stats div {
+  background: color-mix(in srgb, var(--color-surface-0), rgba(255,255,255,0.05));
+  border-radius: var(--radius-md);
+  border: var(--border-hairline);
+  padding: var(--space-sm) var(--space-md);
+  text-align: center;
+}
+
+.stats dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.stats dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.skills,
+.inventory,
+.factions,
+.conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.inventory li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}

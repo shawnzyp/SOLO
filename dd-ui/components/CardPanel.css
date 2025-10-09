@@ -1,0 +1,24 @@
+.card-panel {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.card-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.card-panel__tools {
+  display: inline-flex;
+  gap: var(--space-sm);
+}
+
+.card-panel__meta {
+  display: flex;
+  gap: var(--space-sm);
+  list-style: none;
+  padding: 0;
+  margin: var(--space-md) 0 0;
+}
