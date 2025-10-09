@@ -86,13 +86,16 @@ export class World extends EventTarget {
 
   setHero(hero: Hero, startingNodeId: string): void {
     this.state.hero = hero;
-    this.state.currentNodeId = startingNodeId;
     this.state.journal = [];
     this.state.quests = {};
     this.state.achievements = {};
     this.state.factions = buildInitialFactions();
-    this.persist();
-    this.emit('state-change', this.snapshot);
+    this.state.ambientTrack = undefined;
+    this.state.currentNodeId = null;
+    this.addJournalEntry(
+      `${hero.name}, a ${hero.race} ${hero.heroClass.name}, vows to walk the Ember Road alone.`,
+    );
+    this.setCurrentNode(startingNodeId);
   }
 
   updateHero(hero: Hero): void {
@@ -116,6 +119,7 @@ export class World extends EventTarget {
     if (!hero) throw new Error('No hero created.');
 
     const toastMessages: ToastMessage[] = [];
+    this.addJournalEntry(`Choice taken: ${choice.text}.`);
     let rollResult: RollResult | undefined;
     let nextNodeId: string | null = choice.toNode ?? null;
     let narrative: string | undefined;
@@ -128,6 +132,18 @@ export class World extends EventTarget {
         rollResult.isCriticalSuccess || rollResult.total >= choice.skillCheck.difficultyClass;
       const outcome = passed ? choice.skillCheck.success : choice.skillCheck.failure;
       narrative = outcome.resultText;
+      const modifierLabel = `${modifier >= 0 ? '+' : ''}${modifier}`;
+      const rollDescriptor = rollResult.isCriticalSuccess
+        ? 'Critical Success!'
+        : rollResult.isCriticalFailure
+          ? 'Critical Failure!'
+          : passed
+            ? 'Success'
+            : 'Failure';
+      this.addJournalEntry(
+        `${choice.skillCheck.ability.toUpperCase()} check ${rollDescriptor}: ` +
+          `Rolled ${rollResult.roll}${modifierLabel} = ${rollResult.total} vs DC ${choice.skillCheck.difficultyClass}.`,
+      );
       if (outcome.effects) {
         this.applyEffects(outcome.effects, toastMessages);
       }
@@ -151,6 +167,7 @@ export class World extends EventTarget {
         ...choice.combat,
         enemy: { ...choice.combat.enemy },
       };
+      this.addJournalEntry(`Combat engaged: ${choice.combat.enemy.name}.`);
       this.emit('combat-start', combat);
     } else if (nextNodeId) {
       this.setCurrentNode(nextNodeId);
@@ -193,6 +210,7 @@ export class World extends EventTarget {
         body: `${encounter.enemy.name} is defeated.`,
         tone: 'success',
       });
+      this.addJournalEntry(`Victory claimed over ${encounter.enemy.name}.`);
     } else if (result === 'defeat') {
       if (encounter.defeatEffects) {
         this.applyEffects(encounter.defeatEffects, toastMessages);
@@ -207,6 +225,7 @@ export class World extends EventTarget {
       if (encounter.fleeNode) {
         this.setCurrentNode(encounter.fleeNode);
       }
+      this.addJournalEntry(`Defeated by ${encounter.enemy.name}.`);
     } else if (result === 'flee') {
       outcome = 'flee';
       toastMessages.push({
@@ -218,6 +237,7 @@ export class World extends EventTarget {
       if (encounter.fleeNode) {
         this.setCurrentNode(encounter.fleeNode);
       }
+      this.addJournalEntry(`You fled from ${encounter.enemy.name}.`);
     }
 
     this.emit('combat-end', { victory: outcome === 'victory', result: outcome });
