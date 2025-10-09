@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="sword" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 12l8-8 2 2-8 8-3 1 1-3z"/><path d="M13 6l5 5-7 7H6v-5l7-7z"/></g></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V6l8-3z"/><path d="M12 8v10"/></g></symbol>
+<symbol id="trophy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3a4 4 0 0 1-8 0V4z"/><path d="M8 13h8M10 17h4M9 20h6"/><path d="M4 6h4a4 4 0 0 1-4 4V6zm16 0h-4a4 4 4 0 0 0 4 4V6z"/></g></symbol>
+</svg>
