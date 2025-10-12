@@ -1,5 +1,5 @@
 import { html, render } from 'lit-html';
-import type { Quest } from '../systems/types';
+import type { Quest, QuestObjective } from '../systems/types';
 
 export class DDQuestTracker extends HTMLElement {
   private quests: Quest[] = [];
@@ -46,8 +46,10 @@ export class DDQuestTracker extends HTMLElement {
           li {
             border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 12px;
-            padding: 0.75rem;
+            padding: 0.9rem;
             background: rgba(30, 22, 40, 0.85);
+            display: grid;
+            gap: 0.6rem;
           }
 
           .status {
@@ -93,28 +95,217 @@ export class DDQuestTracker extends HTMLElement {
             font-size: 0.85rem;
             color: var(--dd-muted);
           }
+
+          .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            font-size: 0.72rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+          }
+
+          .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(240, 179, 90, 0.14);
+            color: rgba(240, 179, 90, 0.92);
+            border: 1px solid rgba(240, 179, 90, 0.24);
+          }
+
+          .badge.level {
+            background: rgba(137, 227, 185, 0.14);
+            color: rgba(137, 227, 185, 0.92);
+            border-color: rgba(137, 227, 185, 0.24);
+          }
+
+          .badge.updated {
+            background: rgba(106, 192, 255, 0.12);
+            color: rgba(179, 226, 255, 0.92);
+            border-color: rgba(106, 192, 255, 0.2);
+          }
+
+          .progress {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+          }
+
+          .progress-track {
+            flex: 1;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+          }
+
+          .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f27d72, #f0b35a);
+            transition: width 200ms ease;
+          }
+
+          .objectives {
+            display: grid;
+            gap: 0.4rem;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+          }
+
+          .objectives li {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.82rem;
+            color: rgba(255, 255, 255, 0.85);
+          }
+
+          .objectives li::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1px solid rgba(240, 179, 90, 0.6);
+            background: rgba(240, 179, 90, 0.2);
+            box-shadow: 0 0 6px rgba(240, 179, 90, 0.35);
+          }
+
+          .objective-text {
+            flex: 1;
+          }
+
+          .objectives li.completed {
+            color: var(--dd-success);
+          }
+
+          .objectives li.completed::before {
+            background: var(--dd-success);
+            border-color: rgba(137, 227, 185, 0.9);
+            box-shadow: 0 0 6px rgba(137, 227, 185, 0.45);
+          }
+
+          .objective-optional {
+            margin-left: auto;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.55);
+          }
         </style>
         <h3>Quest Journal</h3>
         <ul>
           ${this.quests.length > 0
-            ? this.quests.map(
-                (quest) => html`
+            ? this.quests.map((quest) => {
+                const objectives = this.normalizeObjectives(quest);
+                const progress = this.calculateProgress(quest, objectives);
+                const progressLabel = `${Math.round(progress * 100)}%`;
+                const updatedLabel = quest.updatedAt
+                  ? `Updated ${this.formatRelativeTime(quest.updatedAt)}`
+                  : null;
+                return html`
                   <li>
-                    <span class="status ${quest.status}">${quest.status}</span>
-                    ${quest.faction
-                      ? html`<span class="faction-tag">${quest.faction}</span>`
-                      : null}
+                    <div class="meta">
+                      <span class="status ${quest.status}">${quest.status}</span>
+                      ${quest.faction
+                        ? html`<span class="faction-tag">${quest.faction}</span>`
+                        : null}
+                      ${quest.location
+                        ? html`<span class="badge">${quest.location}</span>`
+                        : null}
+                      ${typeof quest.recommendedLevel === 'number'
+                        ? html`<span class="badge level">Level ${quest.recommendedLevel}</span>`
+                        : null}
+                      ${updatedLabel
+                        ? html`<span class="badge updated">${updatedLabel}</span>`
+                        : null}
+                    </div>
                     <div><strong>${quest.title}</strong></div>
                     <p>${quest.summary}</p>
+                    <div class="progress" aria-label="Quest progress">
+                      <div class="progress-track">
+                        <div class="progress-fill" style="width: ${progress * 100}%"></div>
+                      </div>
+                      <span>${progressLabel}</span>
+                    </div>
+                    ${objectives.length > 0
+                      ? html`<ul class="objectives">
+                          ${objectives.map(
+                            (objective) => html`
+                              <li class=${objective.completed ? 'completed' : ''}>
+                                <span class="objective-text">${objective.description}</span>
+                                ${objective.optional
+                                  ? html`<span class="objective-optional">Optional</span>`
+                                  : null}
+                              </li>
+                            `,
+                          )}
+                        </ul>`
+                      : null}
                     ${quest.reward ? html`<p>Reward: ${quest.reward}</p>` : null}
                   </li>
-                `,
-              )
+                `;
+              })
             : html`<li><p>No active quests—forge your path!</p></li>`}
         </ul>
       `,
       this.shadowRoot,
     );
+  }
+
+  private normalizeObjectives(quest: Quest): QuestObjective[] {
+    const objectives = quest.objectives ?? [];
+    return objectives.map((objective) => ({
+      ...objective,
+      completed: quest.status === 'completed' ? true : Boolean(objective.completed),
+    }));
+  }
+
+  private calculateProgress(quest: Quest, objectives: QuestObjective[]): number {
+    if (quest.status === 'completed') {
+      return 1;
+    }
+    const objectiveProgress = this.objectiveProgress(objectives);
+    const questProgress = typeof quest.progress === 'number' ? quest.progress : 0;
+    return Math.max(0, Math.min(1, Math.max(objectiveProgress, questProgress)));
+  }
+
+  private objectiveProgress(objectives: QuestObjective[]): number {
+    if (objectives.length === 0) {
+      return 0;
+    }
+    const primaryObjectives = objectives.filter((objective) => !objective.optional);
+    const relevant = primaryObjectives.length > 0 ? primaryObjectives : objectives;
+    if (relevant.length === 0) {
+      return 0;
+    }
+    const completed = relevant.filter((objective) => objective.completed).length;
+    return completed / relevant.length;
+  }
+
+  private formatRelativeTime(timestamp: number): string {
+    const now = Date.now();
+    const delta = Math.max(0, now - timestamp);
+    const minute = 60_000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (delta < minute) {
+      return 'moments ago';
+    }
+    if (delta < hour) {
+      const minutes = Math.round(delta / minute);
+      return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    }
+    if (delta < day) {
+      const hours = Math.round(delta / hour);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.round(delta / day);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
   }
 }
 

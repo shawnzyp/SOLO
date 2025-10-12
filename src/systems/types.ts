@@ -37,6 +37,13 @@ export const SKILLS: SkillDefinition[] = [
 
 export type QuestStatus = 'active' | 'completed' | 'failed';
 
+export interface QuestObjective {
+  id: string;
+  description: string;
+  completed?: boolean;
+  optional?: boolean;
+}
+
 export interface Quest {
   id: string;
   title: string;
@@ -44,6 +51,11 @@ export interface Quest {
   status: QuestStatus;
   faction?: string;
   reward?: string;
+  location?: string;
+  recommendedLevel?: number;
+  progress?: number;
+  objectives?: QuestObjective[];
+  updatedAt?: number;
 }
 
 export interface InventoryItem {
@@ -143,7 +155,14 @@ export type Effect =
   | { type: 'log'; entry: string }
   | { type: 'modifyHP'; delta: number }
   | { type: 'addQuest'; quest: Quest }
-  | { type: 'updateQuest'; questId: string; status: QuestStatus; summary?: string }
+  | {
+      type: 'updateQuest';
+      questId: string;
+      status: QuestStatus;
+      summary?: string;
+      progress?: number;
+      completeObjectives?: string[];
+    }
   | { type: 'grantItem'; item: InventoryItem }
   | { type: 'grantGold'; amount: number }
   | { type: 'achievement'; achievement: Achievement }

@@ -10,7 +10,7 @@ export interface CombatLogEntry {
   tone: 'info' | 'success' | 'danger';
 }
 
-export interface CombatSnapshot {
+interface CombatState {
   heroHP: number;
   heroMaxHP: number;
   enemyHP: number;
@@ -21,12 +21,20 @@ export interface CombatSnapshot {
   logs: CombatLogEntry[];
 }
 
+export interface CombatSnapshot extends CombatState {
+  potionAvailable: boolean;
+  heroAttackBonus: number;
+  enemyArmorClass: number;
+  fleeDifficulty: number;
+  heroDamageRange: { min: number; max: number };
+}
+
 export class CombatSession extends EventTarget {
   private hero: Hero;
 
   private encounter: CombatEncounter;
 
-  private state: CombatSnapshot;
+  private state: CombatState;
 
   private potionUsed = false;
 
@@ -53,7 +61,15 @@ export class CombatSession extends EventTarget {
   }
 
   get snapshot(): CombatSnapshot {
-    return { ...this.state, logs: [...this.state.logs] };
+    return {
+      ...this.state,
+      logs: [...this.state.logs],
+      potionAvailable: this.state.status === 'ongoing' && !this.potionUsed,
+      heroAttackBonus: this.getHeroAttackModifier(),
+      enemyArmorClass: this.encounter.enemy.armorClass,
+      fleeDifficulty: this.getFleeDifficulty(),
+      heroDamageRange: this.getHeroDamageRange(),
+    };
   }
 
   perform(action: CombatAction): CombatSnapshot {
@@ -193,6 +209,21 @@ export class CombatSession extends EventTarget {
 
   private getHeroMobilityModifier(): number {
     return Math.floor((this.hero.attributes.dexterity - 10) / 2);
+  }
+
+  private getHeroDamageRange(): { min: number; max: number } {
+    const base = this.hero.heroClass.id === 'rift-mage' ? 8 : 6;
+    const modifier =
+      this.hero.heroClass.id === 'blade-dancer'
+        ? Math.floor((this.hero.attributes.dexterity - 10) / 2)
+        : Math.floor((this.hero.attributes.strength - 10) / 2);
+    const min = Math.max(1, 1 + modifier);
+    const max = Math.max(1, base + modifier);
+    return { min, max };
+  }
+
+  private getFleeDifficulty(): number {
+    return 12;
   }
 
   private pushLog(text: string, tone: CombatLogEntry['tone']): void {

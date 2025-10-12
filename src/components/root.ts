@@ -415,6 +415,13 @@ export class DDRoot extends HTMLElement {
       HERO_BACKGROUNDS.find((entry) => entry.id === normalizedCreation.backgroundId) ??
       HERO_BACKGROUNDS[0];
     const previewSkills = heroCreation.preview ? this.previewTopSkills(heroCreation.preview) : [];
+    const abilityHighlights = ATTRIBUTE_ORDER.map((ability) => {
+      const raceBonus = selectedRace?.bonuses?.[ability] ?? 0;
+      const classBonus = selectedClass?.bonuses?.[ability] ?? 0;
+      const total = raceBonus + classBonus;
+      return { ability, raceBonus, classBonus, total };
+    }).filter((entry) => entry.total !== 0);
+    const startingItems = selectedClass?.startingItems ?? [];
     render(
       html`
         <style>
@@ -663,6 +670,91 @@ export class DDRoot extends HTMLElement {
             color: rgba(255, 255, 255, 0.8);
           }
 
+          .origin-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 0.5rem;
+          }
+
+          .origin-list li {
+            display: grid;
+            gap: 0.2rem;
+          }
+
+          .origin-list .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.55);
+          }
+
+          .bonus-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+          }
+
+          .bonus {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 10px;
+            background: rgba(137, 227, 185, 0.16);
+            color: rgba(137, 227, 185, 0.95);
+            border: 1px solid rgba(137, 227, 185, 0.3);
+            font-size: 0.85rem;
+          }
+
+          .bonus small {
+            font-size: 0.6rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          .starting-kit {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 0.65rem;
+          }
+
+          .starting-kit li {
+            display: grid;
+            gap: 0.25rem;
+          }
+
+          .starting-kit strong {
+            font-size: 0.95rem;
+          }
+
+          .starting-kit .item-header {
+            display: flex;
+            align-items: baseline;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+          }
+
+          .starting-kit .item-type {
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(106, 192, 255, 0.16);
+            padding: 0.15rem 0.45rem;
+            border-radius: 999px;
+          }
+
+          .starting-kit .item-bonus {
+            font-size: 0.7rem;
+            letter-spacing: 0.06em;
+            color: rgba(240, 179, 90, 0.85);
+          }
+
           .preview-empty {
             margin: 0;
             font-size: 0.9rem;
@@ -799,16 +891,70 @@ export class DDRoot extends HTMLElement {
                             </div>
                             <div class="preview-info">
                               <section>
-                                <h4>Race Heritage</h4>
-                                <p>${selectedRace?.description ?? 'A mysterious lineage.'}</p>
-                              </section>
-                              <section>
-                                <h4>Class Calling</h4>
-                                <p>${selectedClass?.description ?? 'A path yet undefined.'}</p>
+                                <h4>Origin Lore</h4>
+                                <ul class="origin-list">
+                                  <li>
+                                    <span class="label">Race</span>
+                                    <p>${selectedRace?.description ?? 'A mysterious lineage.'}</p>
+                                  </li>
+                                  <li>
+                                    <span class="label">Class</span>
+                                    <p>${selectedClass?.description ?? 'A path yet undefined.'}</p>
+                                  </li>
+                                  <li>
+                                    <span class="label">Background</span>
+                                    <p>${selectedBackground?.description ?? 'History yet to be written.'}</p>
+                                  </li>
+                                </ul>
                               </section>
                               <section>
                                 <h4>Background Feature</h4>
                                 <p>${selectedBackground?.feature ?? 'Hidden potential awaits.'}</p>
+                              </section>
+                              <section>
+                                <h4>Aptitude Highlights</h4>
+                                ${abilityHighlights.length > 0
+                                  ? html`<div class="bonus-badges">
+                                      ${abilityHighlights.map((entry) => html`
+                                        <span class="bonus">
+                                          ${this.formatAbilityLabel(entry.ability)} +${entry.total}
+                                          ${entry.raceBonus && entry.classBonus
+                                            ? html`<small>Race +${entry.raceBonus}, Class +${entry.classBonus}</small>`
+                                            : entry.raceBonus
+                                              ? html`<small>Race +${entry.raceBonus}</small>`
+                                              : entry.classBonus
+                                                ? html`<small>Class +${entry.classBonus}</small>`
+                                                : null}
+                                        </span>
+                                      `)}
+                                    </div>`
+                                  : html`<p>No innate bonuses—rely on raw talent.</p>`}
+                              </section>
+                              <section>
+                                <h4>Starting Kit</h4>
+                                ${startingItems.length > 0
+                                  ? html`<ul class="starting-kit">
+                                      ${startingItems.map((item) => html`
+                                        <li>
+                                          <div class="item-header">
+                                            <strong>${item.name}</strong>
+                                            <span class="item-type">
+                                              ${(item.type.charAt(0).toUpperCase() + item.type.slice(1)).replace(/-/g, ' ')}
+                                            </span>
+                                          </div>
+                                          <p>${item.description}</p>
+                                          ${item.bonus
+                                            ? html`<span class="item-bonus">
+                                                Bonus:
+                                                ${item.bonus.ability
+                                                  ? html`${this.formatAbilityLabel(item.bonus.ability)} +${item.bonus.value}`
+                                                  : html`+${item.bonus.value}`}
+                                              </span>`
+                                            : null}
+                                        </li>
+                                      `)}
+                                    </ul>`
+                                  : html`<p>Begin empty-handed—improvise as you go.</p>`}
                               </section>
                             </div>
                           `

@@ -64,13 +64,30 @@ export const storyNodes: StoryNode[] = [
         effects: [
           {
             type: 'addQuest',
-              quest: {
-                id: 'ember-rift',
-                title: 'Ember Rift Mystery',
-                summary: 'Discover why the Ember Rift has begun to pulse with wild magic.',
-                status: 'active',
-                faction: 'Circle of Embers',
-              },
+            quest: {
+              id: 'ember-rift',
+              title: 'Ember Rift Mystery',
+              summary: 'Discover why the Ember Rift has begun to pulse with wild magic.',
+              status: 'active',
+              faction: 'Circle of Embers',
+              location: 'Ember Wilds',
+              recommendedLevel: 1,
+              progress: 0.25,
+              objectives: [
+                {
+                  id: 'verdyn-arrival',
+                  description: 'Arrive in Verdyn and gather whispers about the Ember Rift.',
+                },
+                {
+                  id: 'choose-allies',
+                  description: "Earn the trust of Verdyn's factions for guidance.",
+                },
+                {
+                  id: 'secure-shard',
+                  description: 'Secure an Ember Shard capable of unlocking the Rift.',
+                },
+              ],
+            },
           },
           {
             type: 'log',
@@ -153,14 +170,33 @@ export const storyNodes: StoryNode[] = [
         effects: [
           {
             type: 'addQuest',
-              quest: {
-                id: 'guild-contract',
-                title: 'Guild Contract: Ember Shard',
-                summary: 'Secure an Ember Shard from the wilds for the Black Guild.',
-                status: 'active',
-                faction: 'Black Guild',
-                reward: 'Favor of the Black Guild',
-              },
+            quest: {
+              id: 'guild-contract',
+              title: 'Guild Contract: Ember Shard',
+              summary: 'Secure an Ember Shard from the wilds for the Black Guild.',
+              status: 'active',
+              faction: 'Black Guild',
+              reward: 'Favor of the Black Guild',
+              location: 'Black Guild Network',
+              recommendedLevel: 2,
+              progress: 0.33,
+              objectives: [
+                {
+                  id: 'accept-contract',
+                  description: 'Seal your pact with the Black Guild broker.',
+                  completed: true,
+                },
+                {
+                  id: 'retrieve-shard',
+                  description: 'Recover an Ember Shard from the Ember Wilds.',
+                },
+                {
+                  id: 'return-to-broker',
+                  description: 'Return the shard to the broker to collect your favor.',
+                  optional: true,
+                },
+              ],
+            },
           },
         ],
         toNode: 'verdyn-road',
@@ -309,6 +345,8 @@ export const storyNodes: StoryNode[] = [
             questId: 'ember-rift',
             status: 'completed',
             summary: 'Skritch guided you to a secret way into the Ember Rift.',
+            progress: 1,
+            completeObjectives: ['verdyn-arrival', 'choose-allies', 'secure-shard'],
           },
         ],
         toNode: 'ember-gate',
