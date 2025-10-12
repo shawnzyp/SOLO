@@ -1,5 +1,13 @@
 import { html, render } from 'lit-html';
-import { createHero, listHeroBackgrounds, listHeroClasses, listHeroRaces } from '../systems/hero';
+import {
+  createHero,
+  listHeroBackgrounds,
+  listHeroClasses,
+  listHeroRaces,
+  loadSrdHeroOptions,
+  subscribeHeroOptions,
+  type HeroOptionSnapshot,
+} from '../systems/hero';
 import type {
   StoryChoice,
   StoryNode,
@@ -23,10 +31,13 @@ import './combat-hud';
 import './toast-stack';
 import './journal-log';
 import './node-map';
+import { loadConfiguredModules } from '../systems/modules';
 
-const HERO_RACES = listHeroRaces();
-const HERO_CLASSES = listHeroClasses();
-const HERO_BACKGROUNDS = listHeroBackgrounds();
+const INITIAL_HERO_OPTIONS: HeroOptionSnapshot = {
+  races: listHeroRaces(),
+  classes: listHeroClasses(),
+  backgrounds: listHeroBackgrounds(),
+};
 
 type RenderChoice = StoryChoice & { disabled?: boolean };
 
@@ -57,12 +68,15 @@ const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [
   'charisma',
 ];
 
-function normalizeHeroCreation(draft: HeroCreationDraft): NormalizedHeroCreation {
+function normalizeHeroCreation(
+  draft: HeroCreationDraft,
+  options: HeroOptionSnapshot,
+): NormalizedHeroCreation {
   const trimmedName = draft.name.trim();
   const trimmedPortrait = draft.portrait.trim();
-  const fallbackRace = HERO_RACES[0]?.id ?? '';
-  const fallbackClass = HERO_CLASSES[0]?.id ?? '';
-  const fallbackBackground = HERO_BACKGROUNDS[0]?.id ?? '';
+  const fallbackRace = options.races[0]?.id ?? '';
+  const fallbackClass = options.classes[0]?.id ?? '';
+  const fallbackBackground = options.backgrounds[0]?.id ?? '';
 
   return {
     name: trimmedName.length > 0 ? trimmedName : DEFAULT_HERO_NAME,
@@ -81,15 +95,15 @@ function buildHeroPreview(normalized: NormalizedHeroCreation): Hero | null {
   }
 }
 
-function createInitialHeroCreationState(): HeroCreationState {
+function createInitialHeroCreationState(options: HeroOptionSnapshot): HeroCreationState {
   const base: HeroCreationDraft = {
     name: DEFAULT_HERO_NAME,
     portrait: '',
-    raceId: HERO_RACES[0]?.id ?? '',
-    classId: HERO_CLASSES[0]?.id ?? '',
-    backgroundId: HERO_BACKGROUNDS[0]?.id ?? '',
+    raceId: options.races[0]?.id ?? '',
+    classId: options.classes[0]?.id ?? '',
+    backgroundId: options.backgrounds[0]?.id ?? '',
   };
-  const normalized = normalizeHeroCreation(base);
+  const normalized = normalizeHeroCreation(base, options);
   return {
     ...base,
     preview: buildHeroPreview(normalized),
@@ -112,6 +126,9 @@ interface RootState {
   journal: JournalEntry[];
   mapNodes: MapNode[];
   heroCreation: HeroCreationState;
+  heroOptions: HeroOptionSnapshot;
+  heroOptionsLoading: boolean;
+  heroOptionsError: string | null;
 }
 
 export class DDRoot extends HTMLElement {
@@ -133,10 +150,20 @@ export class DDRoot extends HTMLElement {
     },
     journal: [],
     mapNodes: [],
-    heroCreation: createInitialHeroCreationState(),
+    heroCreation: createInitialHeroCreationState(INITIAL_HERO_OPTIONS),
+    heroOptions: {
+      races: [...INITIAL_HERO_OPTIONS.races],
+      classes: [...INITIAL_HERO_OPTIONS.classes],
+      backgrounds: [...INITIAL_HERO_OPTIONS.backgrounds],
+    },
+    heroOptionsLoading: false,
+    heroOptionsError: null,
   };
 
   private combatSession: CombatSession | null = null;
+  private heroOptionsUnsubscribe: (() => void) | null = null;
+  private srdAbortController: AbortController | null = null;
+  private moduleAbortController: AbortController | null = null;
 
   constructor() {
     super();
@@ -148,6 +175,21 @@ export class DDRoot extends HTMLElement {
   connectedCallback(): void {
     this.addEventListener('choice-selected', this.handleChoiceSelected as EventListener);
     this.addEventListener('combat-action', this.handleCombatAction as EventListener);
+    this.heroOptionsUnsubscribe = subscribeHeroOptions((options) => {
+      const reconciled = this.reconcileHeroCreation(this.state.heroCreation, options);
+      this.state = {
+        ...this.state,
+        heroOptions: {
+          races: [...options.races],
+          classes: [...options.classes],
+          backgrounds: [...options.backgrounds],
+        },
+        heroCreation: reconciled,
+      };
+      this.requestRender();
+    });
+    this.loadSrdContent();
+    void this.loadContentModules();
     this.world.addEventListener('state-change', (event) => {
       const detail = (event as CustomEvent<WorldState>).detail;
       const node = this.world.currentNode;
@@ -277,6 +319,18 @@ export class DDRoot extends HTMLElement {
   disconnectedCallback(): void {
     this.removeEventListener('choice-selected', this.handleChoiceSelected as EventListener);
     this.removeEventListener('combat-action', this.handleCombatAction as EventListener);
+    if (this.heroOptionsUnsubscribe) {
+      this.heroOptionsUnsubscribe();
+      this.heroOptionsUnsubscribe = null;
+    }
+    if (this.srdAbortController) {
+      this.srdAbortController.abort();
+      this.srdAbortController = null;
+    }
+    if (this.moduleAbortController) {
+      this.moduleAbortController.abort();
+      this.moduleAbortController = null;
+    }
     this.audio.dispose();
   }
 
@@ -332,7 +386,7 @@ export class DDRoot extends HTMLElement {
     form.reset();
     this.state = {
       ...this.state,
-      heroCreation: createInitialHeroCreationState(),
+      heroCreation: createInitialHeroCreationState(this.state.heroOptions),
     };
     this.requestRender();
   }
@@ -362,7 +416,7 @@ export class DDRoot extends HTMLElement {
       classId: String(formData.get('class') ?? ''),
       backgroundId: String(formData.get('background') ?? ''),
     };
-    const normalized = normalizeHeroCreation(draft);
+    const normalized = normalizeHeroCreation(draft, this.state.heroOptions);
     const preview = buildHeroPreview(normalized);
     this.state = {
       ...this.state,
@@ -376,7 +430,102 @@ export class DDRoot extends HTMLElement {
 
   private getNormalizedHeroCreation(): NormalizedHeroCreation {
     const { name, portrait, raceId, classId, backgroundId } = this.state.heroCreation;
-    return normalizeHeroCreation({ name, portrait, raceId, classId, backgroundId });
+    return normalizeHeroCreation(
+      { name, portrait, raceId, classId, backgroundId },
+      this.state.heroOptions,
+    );
+  }
+
+  private reconcileHeroCreation(
+    current: HeroCreationState,
+    options: HeroOptionSnapshot,
+  ): HeroCreationState {
+    const normalized = normalizeHeroCreation(
+      {
+        name: current.name,
+        portrait: current.portrait,
+        raceId: current.raceId,
+        classId: current.classId,
+        backgroundId: current.backgroundId,
+      },
+      options,
+    );
+    return {
+      ...current,
+      name: normalized.name,
+      portrait: normalized.portrait,
+      raceId: normalized.raceId,
+      classId: normalized.classId,
+      backgroundId: normalized.backgroundId,
+      preview: buildHeroPreview(normalized),
+    };
+  }
+
+  private async loadSrdContent(): Promise<void> {
+    if (typeof fetch !== 'function') {
+      return;
+    }
+
+    if (this.srdAbortController) {
+      this.srdAbortController.abort();
+    }
+
+    const controller = new AbortController();
+    this.srdAbortController = controller;
+
+    this.state = {
+      ...this.state,
+      heroOptionsLoading: true,
+      heroOptionsError: null,
+    };
+    this.requestRender();
+
+    try {
+      await loadSrdHeroOptions(controller.signal);
+      if (controller.signal.aborted) {
+        return;
+      }
+      this.state = {
+        ...this.state,
+        heroOptionsLoading: false,
+      };
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to load D&D 5e SRD content.';
+      this.state = {
+        ...this.state,
+        heroOptionsLoading: false,
+        heroOptionsError: message,
+      };
+    }
+
+    this.requestRender();
+  }
+
+  private async loadContentModules(): Promise<void> {
+    if (typeof fetch !== 'function') {
+      return;
+    }
+
+    if (this.moduleAbortController) {
+      this.moduleAbortController.abort();
+    }
+
+    const controller = new AbortController();
+    this.moduleAbortController = controller;
+
+    try {
+      await loadConfiguredModules(controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.warn('Content module load failed', error);
+      }
+    }
   }
 
   private previewTopSkills(hero: Hero): { label: string; value: number }[] {
@@ -405,15 +554,21 @@ export class DDRoot extends HTMLElement {
       journal,
       mapNodes,
       heroCreation,
+      heroOptions,
+      heroOptionsLoading,
+      heroOptionsError,
     } = this.state;
     const normalizedCreation = this.getNormalizedHeroCreation();
+    const heroRaces = heroOptions.races;
+    const heroClasses = heroOptions.classes;
+    const heroBackgrounds = heroOptions.backgrounds;
     const selectedRace =
-      HERO_RACES.find((race) => race.id === normalizedCreation.raceId) ?? HERO_RACES[0];
+      heroRaces.find((race) => race.id === normalizedCreation.raceId) ?? heroRaces[0] ?? null;
     const selectedClass =
-      HERO_CLASSES.find((entry) => entry.id === normalizedCreation.classId) ?? HERO_CLASSES[0];
+      heroClasses.find((entry) => entry.id === normalizedCreation.classId) ?? heroClasses[0] ?? null;
     const selectedBackground =
-      HERO_BACKGROUNDS.find((entry) => entry.id === normalizedCreation.backgroundId) ??
-      HERO_BACKGROUNDS[0];
+      heroBackgrounds.find((entry) => entry.id === normalizedCreation.backgroundId) ??
+      heroBackgrounds[0] ?? null;
     const previewSkills = heroCreation.preview ? this.previewTopSkills(heroCreation.preview) : [];
     const abilityHighlights = ATTRIBUTE_ORDER.map((ability) => {
       const raceBonus = selectedRace?.bonuses?.[ability] ?? 0;
@@ -491,6 +646,73 @@ export class DDRoot extends HTMLElement {
           form {
             display: grid;
             gap: 1.5rem;
+          }
+
+          .integration-status {
+            background: rgba(32, 24, 44, 0.6);
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            border-radius: 16px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .integration-status p {
+            margin: 0.25rem 0;
+          }
+
+          .integration-status code {
+            background: rgba(8, 6, 12, 0.6);
+            border-radius: 6px;
+            padding: 0.1rem 0.4rem;
+            font-size: 0.85rem;
+          }
+
+          .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+          }
+
+          .status::before {
+            content: '';
+            width: 0.6rem;
+            height: 0.6rem;
+            border-radius: 50%;
+            display: inline-block;
+          }
+
+          .status.loading::before {
+            background: #f0b35a;
+            animation: pulse 1.6s ease-in-out infinite;
+          }
+
+          .status.ready::before {
+            background: #7be7a5;
+          }
+
+          .status.error::before {
+            background: #f27d72;
+          }
+
+          @keyframes pulse {
+            0% {
+              opacity: 0.4;
+            }
+            50% {
+              opacity: 1;
+            }
+            100% {
+              opacity: 0.4;
+            }
+          }
+
+          .integration-hint {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
           }
 
           .grid {
@@ -792,6 +1014,23 @@ export class DDRoot extends HTMLElement {
                 <div class="creation-panel">
                   <h1>Dungeons & Dragons: Chronicles of the Lone Adventurer</h1>
                   <p>Create your lone hero to begin the saga.</p>
+                  <div class="integration-status">
+                    <p>
+                      Available SRD options:
+                      <strong>${heroOptions.races.length}</strong> races ·
+                      <strong>${heroOptions.classes.length}</strong> classes ·
+                      <strong>${heroOptions.backgrounds.length}</strong> backgrounds
+                    </p>
+                    ${heroOptionsLoading
+                      ? html`<span class="status loading">Loading D&D 5e SRD content…</span>`
+                      : heroOptionsError
+                          ? html`<span class="status error">SRD sync failed: ${heroOptionsError}</span>`
+                          : html`<span class="status ready">SRD content synchronized.</span>`}
+                    <p class="integration-hint">
+                      To integrate additional material you have permission to use, drop JSON modules into
+                      <code>public/modules</code> and they will load automatically on startup.
+                    </p>
+                  </div>
                   <div class="creation-content">
                     <form
                       @submit=${(event: Event) => this.handleHeroCreationSubmit(event)}
@@ -823,28 +1062,34 @@ export class DDRoot extends HTMLElement {
                         <label>
                           Race
                           <select name="race" .value=${heroCreation.raceId}>
-                            ${HERO_RACES.map(
-                              (race) => html`<option value=${race.id}>${race.name}</option>`,
-                            )}
+                            ${heroOptions.races.length > 0
+                              ? heroOptions.races.map(
+                                  (race) => html`<option value=${race.id}>${race.name}</option>`,
+                                )
+                              : html`<option value="" disabled>No races available</option>`}
                           </select>
                         </label>
                         <label>
                           Class
                           <select name="class" .value=${heroCreation.classId}>
-                            ${HERO_CLASSES.map(
-                              (heroClass) => html`<option value=${heroClass.id}>${heroClass.name}</option>`,
-                            )}
+                            ${heroOptions.classes.length > 0
+                              ? heroOptions.classes.map(
+                                  (heroClass) => html`<option value=${heroClass.id}>${heroClass.name}</option>`,
+                                )
+                              : html`<option value="" disabled>No classes available</option>`}
                           </select>
                         </label>
                       </div>
                       <label>
                         Background
                         <select name="background" .value=${heroCreation.backgroundId}>
-                          ${HERO_BACKGROUNDS.map(
-                            (background) => html`
-                              <option value=${background.id}>${background.name}</option>
-                            `,
-                          )}
+                          ${heroOptions.backgrounds.length > 0
+                            ? heroOptions.backgrounds.map(
+                                (background) => html`
+                                  <option value=${background.id}>${background.name}</option>
+                                `,
+                              )
+                            : html`<option value="" disabled>No backgrounds available</option>`}
                         </select>
                       </label>
                       <button class="primary" type="submit">Begin the Chronicle</button>

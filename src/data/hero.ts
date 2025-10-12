@@ -1,6 +1,6 @@
 import type { HeroBackgroundOption, HeroClassOption } from '../systems/types';
 
-export const HERO_CLASSES: HeroClassOption[] = [
+export const BASE_HERO_CLASSES: HeroClassOption[] = [
   {
     id: 'blade-dancer',
     name: 'Blade Dancer',
@@ -62,7 +62,7 @@ export const HERO_CLASSES: HeroClassOption[] = [
   },
 ];
 
-export const HERO_BACKGROUNDS: HeroBackgroundOption[] = [
+export const BASE_HERO_BACKGROUNDS: HeroBackgroundOption[] = [
   {
     id: 'exiled-noble',
     name: 'Exiled Noble',
