@@ -399,20 +399,50 @@ export class World extends EventTarget {
           }
           break;
         }
-        case 'addQuest':
-          this.state.quests[effect.quest.id] = effect.quest;
+        case 'addQuest': {
+          const quest: Quest = {
+            ...effect.quest,
+            objectives: effect.quest.objectives
+              ? effect.quest.objectives.map((objective) => ({
+                  ...objective,
+                  completed: Boolean(objective.completed),
+                }))
+              : undefined,
+            progress:
+              effect.quest.progress ?? (effect.quest.status === 'completed' ? 1 : 0),
+            updatedAt: Date.now(),
+          };
+          this.state.quests[quest.id] = quest;
           toastMessages.push({
-            id: `quest-${effect.quest.id}`,
-            title: `Quest Started: ${effect.quest.title}`,
-            body: effect.quest.summary,
+            id: `quest-${quest.id}`,
+            title: `Quest Started: ${quest.title}`,
+            body: quest.summary,
             tone: 'info',
           });
           break;
+        }
         case 'updateQuest': {
           const quest = this.state.quests[effect.questId];
           if (quest) {
             quest.status = effect.status;
             if (effect.summary) quest.summary = effect.summary;
+            if (typeof effect.progress === 'number') {
+              quest.progress = effect.progress;
+            }
+            if (quest.status === 'completed') {
+              quest.progress = 1;
+            }
+            if (quest.objectives) {
+              const completedIds = new Set(effect.completeObjectives ?? []);
+              quest.objectives = quest.objectives.map((objective) => {
+                const completed =
+                  quest.status === 'completed' || completedIds.has(objective.id)
+                    ? true
+                    : objective.completed ?? false;
+                return { ...objective, completed };
+              });
+            }
+            quest.updatedAt = Date.now();
             toastMessages.push({
               id: `quest-${quest.id}-${effect.status}`,
               title: `${quest.title} ${effect.status === 'completed' ? 'Completed' : 'Updated'}`,
