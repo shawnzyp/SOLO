@@ -11,7 +11,7 @@ import type {
   DiscoveredNode,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
-import type { CombatEncounter, WorldState } from '../systems/types';
+import { SKILLS, type CombatEncounter, type WorldState } from '../systems/types';
 import { CombatSession, type CombatSnapshot, type CombatAction } from '../systems/combat';
 import { AudioManager } from '../systems/audio';
 
@@ -32,6 +32,70 @@ type RenderChoice = StoryChoice & { disabled?: boolean };
 
 type MapNode = DiscoveredNode & { isCurrent: boolean };
 
+interface HeroCreationDraft {
+  name: string;
+  portrait: string;
+  raceId: string;
+  classId: string;
+  backgroundId: string;
+}
+
+interface NormalizedHeroCreation extends HeroCreationDraft {}
+
+interface HeroCreationState extends HeroCreationDraft {
+  preview: Hero | null;
+}
+
+const DEFAULT_HERO_NAME = 'Lone Adventurer';
+const DEFAULT_HERO_PORTRAIT = 'https://avatars.dicebear.com/api/adventurer/chronicles.svg';
+const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+];
+
+function normalizeHeroCreation(draft: HeroCreationDraft): NormalizedHeroCreation {
+  const trimmedName = draft.name.trim();
+  const trimmedPortrait = draft.portrait.trim();
+  const fallbackRace = HERO_RACES[0]?.id ?? '';
+  const fallbackClass = HERO_CLASSES[0]?.id ?? '';
+  const fallbackBackground = HERO_BACKGROUNDS[0]?.id ?? '';
+
+  return {
+    name: trimmedName.length > 0 ? trimmedName : DEFAULT_HERO_NAME,
+    portrait: trimmedPortrait.length > 0 ? trimmedPortrait : DEFAULT_HERO_PORTRAIT,
+    raceId: draft.raceId || fallbackRace,
+    classId: draft.classId || fallbackClass,
+    backgroundId: draft.backgroundId || fallbackBackground,
+  };
+}
+
+function buildHeroPreview(normalized: NormalizedHeroCreation): Hero | null {
+  try {
+    return createHero(normalized);
+  } catch (error) {
+    return null;
+  }
+}
+
+function createInitialHeroCreationState(): HeroCreationState {
+  const base: HeroCreationDraft = {
+    name: DEFAULT_HERO_NAME,
+    portrait: '',
+    raceId: HERO_RACES[0]?.id ?? '',
+    classId: HERO_CLASSES[0]?.id ?? '',
+    backgroundId: HERO_BACKGROUNDS[0]?.id ?? '',
+  };
+  const normalized = normalizeHeroCreation(base);
+  return {
+    ...base,
+    preview: buildHeroPreview(normalized),
+  };
+}
+
 interface RootState {
   hero: Hero | null;
   node: StoryNode | null;
@@ -47,6 +111,7 @@ interface RootState {
   };
   journal: JournalEntry[];
   mapNodes: MapNode[];
+  heroCreation: HeroCreationState;
 }
 
 export class DDRoot extends HTMLElement {
@@ -68,6 +133,7 @@ export class DDRoot extends HTMLElement {
     },
     journal: [],
     mapNodes: [],
+    heroCreation: createInitialHeroCreationState(),
   };
 
   private combatSession: CombatSession | null = null;
@@ -260,25 +326,15 @@ export class DDRoot extends HTMLElement {
   private handleHeroCreationSubmit(event: Event): void {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
-    const formData = new FormData(form);
-    const name = String(formData.get('name') || 'Lone Adventurer');
-    const portrait = String(
-      formData.get('portrait') || 'https://avatars.dicebear.com/api/adventurer/chronicles.svg',
-    );
-    const raceId = String(formData.get('race') || HERO_RACES[0].id);
-    const classId = String(formData.get('class') || HERO_CLASSES[0].id);
-    const backgroundId = String(formData.get('background') || HERO_BACKGROUNDS[0].id);
-
-    const hero = createHero({
-      name,
-      portrait,
-      raceId,
-      classId,
-      backgroundId,
-    });
-
+    const normalized = this.getNormalizedHeroCreation();
+    const hero = createHero(normalized);
     this.world.setHero(hero, 'prologue-awakening');
     form.reset();
+    this.state = {
+      ...this.state,
+      heroCreation: createInitialHeroCreationState(),
+    };
+    this.requestRender();
   }
 
   private computeChoices(node: StoryNode | null): RenderChoice[] {
@@ -289,6 +345,49 @@ export class DDRoot extends HTMLElement {
         ...choice,
         disabled: choice.requirements ? !this.world.checkConditions(choice.requirements) : false,
       }));
+  }
+
+  private handleHeroCreationInput(event: Event): void {
+    const form = event.currentTarget as HTMLFormElement | null;
+    if (!form) return;
+    this.updateHeroCreationDraft(form);
+  }
+
+  private updateHeroCreationDraft(form: HTMLFormElement): void {
+    const formData = new FormData(form);
+    const draft: HeroCreationDraft = {
+      name: String(formData.get('name') ?? ''),
+      portrait: String(formData.get('portrait') ?? ''),
+      raceId: String(formData.get('race') ?? ''),
+      classId: String(formData.get('class') ?? ''),
+      backgroundId: String(formData.get('background') ?? ''),
+    };
+    const normalized = normalizeHeroCreation(draft);
+    const preview = buildHeroPreview(normalized);
+    this.state = {
+      ...this.state,
+      heroCreation: {
+        ...draft,
+        preview,
+      },
+    };
+    this.requestRender();
+  }
+
+  private getNormalizedHeroCreation(): NormalizedHeroCreation {
+    const { name, portrait, raceId, classId, backgroundId } = this.state.heroCreation;
+    return normalizeHeroCreation({ name, portrait, raceId, classId, backgroundId });
+  }
+
+  private previewTopSkills(hero: Hero): { label: string; value: number }[] {
+    return [...SKILLS]
+      .map((skill) => ({ label: skill.label, value: hero.skills[skill.id] ?? 0 }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 3);
+  }
+
+  private formatAbilityLabel(ability: keyof Hero['attributes']): string {
+    return ability.charAt(0).toUpperCase() + ability.slice(1);
   }
 
   private requestRender(): void {
@@ -305,7 +404,17 @@ export class DDRoot extends HTMLElement {
       combat,
       journal,
       mapNodes,
+      heroCreation,
     } = this.state;
+    const normalizedCreation = this.getNormalizedHeroCreation();
+    const selectedRace =
+      HERO_RACES.find((race) => race.id === normalizedCreation.raceId) ?? HERO_RACES[0];
+    const selectedClass =
+      HERO_CLASSES.find((entry) => entry.id === normalizedCreation.classId) ?? HERO_CLASSES[0];
+    const selectedBackground =
+      HERO_BACKGROUNDS.find((entry) => entry.id === normalizedCreation.backgroundId) ??
+      HERO_BACKGROUNDS[0];
+    const previewSkills = heroCreation.preview ? this.previewTopSkills(heroCreation.preview) : [];
     render(
       html`
         <style>
@@ -365,6 +474,13 @@ export class DDRoot extends HTMLElement {
             text-align: center;
           }
 
+          .creation-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 2rem;
+            align-items: flex-start;
+          }
+
           form {
             display: grid;
             gap: 1.5rem;
@@ -396,6 +512,13 @@ export class DDRoot extends HTMLElement {
             color: inherit;
           }
 
+          .field-hint {
+            display: block;
+            margin-top: -0.15rem;
+            font-size: 0.75rem;
+            color: var(--dd-muted);
+          }
+
           button.primary {
             padding: 0.95rem 1.25rem;
             border-radius: 12px;
@@ -418,6 +541,133 @@ export class DDRoot extends HTMLElement {
             letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--dd-muted);
+          }
+
+          .preview-panel {
+            background: rgba(18, 14, 28, 0.85);
+            border: 1px solid rgba(255, 210, 164, 0.18);
+            border-radius: 20px;
+            padding: 1.5rem;
+            display: grid;
+            gap: 1rem;
+          }
+
+          .preview-panel h2 {
+            margin: 0;
+            font-family: 'Cinzel', serif;
+            font-size: 1.35rem;
+            letter-spacing: 0.06em;
+          }
+
+          .preview-panel .section-title {
+            margin: 0;
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+          }
+
+          .preview-identity {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+          }
+
+          .preview-portrait {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            border: 2px solid rgba(240, 179, 90, 0.65);
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+          }
+
+          .preview-identity h3 {
+            margin: 0;
+            font-size: 1.2rem;
+            letter-spacing: 0.04em;
+          }
+
+          .preview-summary {
+            font-size: 0.9rem;
+            color: var(--dd-muted);
+            margin: 0.25rem 0 0;
+          }
+
+          .preview-attributes {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.65rem;
+          }
+
+          .preview-attributes li {
+            list-style: none;
+            background: rgba(32, 24, 44, 0.9);
+            border: 1px solid rgba(255, 210, 164, 0.14);
+            border-radius: 12px;
+            padding: 0.5rem 0.65rem;
+            text-align: center;
+          }
+
+          .preview-attributes .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--dd-muted);
+          }
+
+          .preview-attributes .value {
+            font-size: 1.15rem;
+            font-weight: 700;
+          }
+
+          .preview-skills {
+            display: grid;
+            gap: 0.5rem;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+          }
+
+          .preview-skills li {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 0.35rem;
+          }
+
+          .preview-info {
+            display: grid;
+            gap: 0.75rem;
+          }
+
+          .preview-info section {
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            padding: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+          }
+
+          .preview-info h4 {
+            margin: 0 0 0.35rem;
+            font-size: 0.85rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: rgba(240, 179, 90, 0.85);
+          }
+
+          .preview-info p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.8);
+          }
+
+          .preview-empty {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--dd-muted);
+            text-align: center;
           }
         </style>
         <div class="layout">
@@ -450,50 +700,121 @@ export class DDRoot extends HTMLElement {
                 <div class="creation-panel">
                   <h1>Dungeons & Dragons: Chronicles of the Lone Adventurer</h1>
                   <p>Create your lone hero to begin the saga.</p>
-                  <form @submit=${(event: Event) => this.handleHeroCreationSubmit(event)}>
-                    <div class="grid two">
+                  <div class="creation-content">
+                    <form
+                      @submit=${(event: Event) => this.handleHeroCreationSubmit(event)}
+                      @input=${(event: Event) => this.handleHeroCreationInput(event)}
+                      @change=${(event: Event) => this.handleHeroCreationInput(event)}
+                    >
+                      <div class="grid two">
+                        <label>
+                          Hero Name
+                          <input
+                            name="name"
+                            placeholder="Aria Stormborn"
+                            minlength="2"
+                            .value=${heroCreation.name}
+                          />
+                          <span class="field-hint">Leave blank to begin as the Lone Adventurer.</span>
+                        </label>
+                        <label>
+                          Portrait URL
+                          <input
+                            name="portrait"
+                            placeholder="https://avatars.dicebear.com/api/adventurer/aria.svg"
+                            .value=${heroCreation.portrait}
+                          />
+                          <span class="field-hint">Leave blank to use the illustrated default portrait.</span>
+                        </label>
+                      </div>
+                      <div class="grid two">
+                        <label>
+                          Race
+                          <select name="race" .value=${heroCreation.raceId}>
+                            ${HERO_RACES.map(
+                              (race) => html`<option value=${race.id}>${race.name}</option>`,
+                            )}
+                          </select>
+                        </label>
+                        <label>
+                          Class
+                          <select name="class" .value=${heroCreation.classId}>
+                            ${HERO_CLASSES.map(
+                              (heroClass) => html`<option value=${heroClass.id}>${heroClass.name}</option>`,
+                            )}
+                          </select>
+                        </label>
+                      </div>
                       <label>
-                        Hero Name
-                        <input name="name" placeholder="Aria Stormborn" required minlength="2" />
-                      </label>
-                      <label>
-                        Portrait URL
-                        <input
-                          name="portrait"
-                          placeholder="https://avatars.dicebear.com/api/adventurer/aria.svg"
-                        />
-                      </label>
-                    </div>
-                    <div class="grid two">
-                      <label>
-                        Race
-                        <select name="race">
-                          ${HERO_RACES.map(
-                            (race) => html`<option value=${race.id}>${race.name}</option>`,
+                        Background
+                        <select name="background" .value=${heroCreation.backgroundId}>
+                          ${HERO_BACKGROUNDS.map(
+                            (background) => html`
+                              <option value=${background.id}>${background.name}</option>
+                            `,
                           )}
                         </select>
                       </label>
-                      <label>
-                        Class
-                        <select name="class">
-                          ${HERO_CLASSES.map(
-                            (heroClass) => html`<option value=${heroClass.id}>${heroClass.name}</option>`,
-                          )}
-                        </select>
-                      </label>
-                    </div>
-                    <label>
-                      Background
-                      <select name="background">
-                        ${HERO_BACKGROUNDS.map(
-                          (background) => html`
-                            <option value=${background.id}>${background.name}</option>
-                          `,
-                        )}
-                      </select>
-                    </label>
-                    <button class="primary" type="submit">Begin the Chronicle</button>
-                  </form>
+                      <button class="primary" type="submit">Begin the Chronicle</button>
+                    </form>
+                    <section class="preview-panel">
+                      <h2>Hero Preview</h2>
+                      ${heroCreation.preview
+                        ? html`
+                            <div class="preview-identity">
+                              <div
+                                class="preview-portrait"
+                                style="background-image: url('${normalizedCreation.portrait}')"
+                              ></div>
+                              <div>
+                                <h3>${normalizedCreation.name}</h3>
+                                <p class="preview-summary">
+                                  ${heroCreation.preview.race} · ${heroCreation.preview.heroClass.name}
+                                </p>
+                              </div>
+                            </div>
+                            <ul class="preview-attributes">
+                              ${ATTRIBUTE_ORDER.map((ability) => {
+                                const value = heroCreation.preview?.attributes[ability] ?? 0;
+                                return html`
+                                  <li>
+                                    <div class="label">${this.formatAbilityLabel(ability)}</div>
+                                    <div class="value">${value}</div>
+                                  </li>
+                                `;
+                              })}
+                            </ul>
+                            <div>
+                              <h3 class="section-title">Signature Skills</h3>
+                              <ul class="preview-skills">
+                                ${previewSkills.map(
+                                  (skill) => html`
+                                    <li>
+                                      <span>${skill.label}</span>
+                                      <strong>${skill.value >= 0 ? '+' : ''}${skill.value}</strong>
+                                    </li>
+                                  `,
+                                )}
+                              </ul>
+                            </div>
+                            <div class="preview-info">
+                              <section>
+                                <h4>Race Heritage</h4>
+                                <p>${selectedRace?.description ?? 'A mysterious lineage.'}</p>
+                              </section>
+                              <section>
+                                <h4>Class Calling</h4>
+                                <p>${selectedClass?.description ?? 'A path yet undefined.'}</p>
+                              </section>
+                              <section>
+                                <h4>Background Feature</h4>
+                                <p>${selectedBackground?.feature ?? 'Hidden potential awaits.'}</p>
+                              </section>
+                            </div>
+                          `
+                        : html`<p class="preview-empty">Adjust your selections to preview your hero.</p>`}
+                    </section>
+                  </div>
                 </div>
               </div>
             `
