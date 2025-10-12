@@ -1,11 +1,13 @@
+import type { Ability } from '../systems/types';
+
 export interface HeroRaceOption {
   id: string;
   name: string;
   description: string;
-  bonuses: Partial<Record<'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma', number>>;
+  bonuses: Partial<Record<Ability, number>>;
 }
 
-export const HERO_RACES: HeroRaceOption[] = [
+export const BASE_HERO_RACES: HeroRaceOption[] = [
   {
     id: 'human',
     name: 'Human',
