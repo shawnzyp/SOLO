@@ -8,6 +8,11 @@ import {
   subscribeHeroOptions,
   type HeroOptionSnapshot,
 } from '../systems/hero';
+import {
+  fetchSrdCompendiumIndex,
+  type SrdCompendiumCategory,
+  type SrdCompendiumEntrySummary,
+} from '../systems/dnd5e';
 import type {
   StoryChoice,
   StoryNode,
@@ -31,6 +36,7 @@ import './combat-hud';
 import './toast-stack';
 import './journal-log';
 import './node-map';
+import './dnd-compendium';
 import { loadConfiguredModules } from '../systems/modules';
 
 const INITIAL_HERO_OPTIONS: HeroOptionSnapshot = {
@@ -67,6 +73,25 @@ const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [
   'wisdom',
   'charisma',
 ];
+
+const COMPENDIUM_CATEGORY_ORDER: Array<{ id: SrdCompendiumCategory; label: string }> = [
+  { id: 'rules', label: 'Core Rules' },
+  { id: 'rule-sections', label: 'Rule Sections' },
+  { id: 'feats', label: 'Feats' },
+  { id: 'equipment', label: 'Weapons & Equipment' },
+  { id: 'magic-items', label: 'Magic Items' },
+  { id: 'spells', label: 'Spells' },
+];
+
+function createEmptyCompendiumIndex(): Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]> {
+  return COMPENDIUM_CATEGORY_ORDER.reduce(
+    (acc, entry) => {
+      acc[entry.id] = [];
+      return acc;
+    },
+    {} as Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]>,
+  );
+}
 
 function normalizeHeroCreation(
   draft: HeroCreationDraft,
@@ -129,6 +154,9 @@ interface RootState {
   heroOptions: HeroOptionSnapshot;
   heroOptionsLoading: boolean;
   heroOptionsError: string | null;
+  compendium: Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]>;
+  compendiumLoading: boolean;
+  compendiumError: string | null;
 }
 
 export class DDRoot extends HTMLElement {
@@ -158,12 +186,16 @@ export class DDRoot extends HTMLElement {
     },
     heroOptionsLoading: false,
     heroOptionsError: null,
+    compendium: createEmptyCompendiumIndex(),
+    compendiumLoading: false,
+    compendiumError: null,
   };
 
   private combatSession: CombatSession | null = null;
   private heroOptionsUnsubscribe: (() => void) | null = null;
   private srdAbortController: AbortController | null = null;
   private moduleAbortController: AbortController | null = null;
+  private compendiumAbortController: AbortController | null = null;
 
   constructor() {
     super();
@@ -189,6 +221,7 @@ export class DDRoot extends HTMLElement {
       this.requestRender();
     });
     this.loadSrdContent();
+    void this.loadCompendiumIndex();
     void this.loadContentModules();
     this.world.addEventListener('state-change', (event) => {
       const detail = (event as CustomEvent<WorldState>).detail;
@@ -330,6 +363,10 @@ export class DDRoot extends HTMLElement {
     if (this.moduleAbortController) {
       this.moduleAbortController.abort();
       this.moduleAbortController = null;
+    }
+    if (this.compendiumAbortController) {
+      this.compendiumAbortController.abort();
+      this.compendiumAbortController = null;
     }
     this.audio.dispose();
   }
@@ -507,6 +544,66 @@ export class DDRoot extends HTMLElement {
     this.requestRender();
   }
 
+  private async loadCompendiumIndex(): Promise<void> {
+    if (typeof fetch !== 'function') {
+      return;
+    }
+
+    if (this.compendiumAbortController) {
+      this.compendiumAbortController.abort();
+    }
+
+    const controller = new AbortController();
+    this.compendiumAbortController = controller;
+
+    this.state = {
+      ...this.state,
+      compendiumLoading: true,
+      compendiumError: null,
+    };
+    this.requestRender();
+
+    try {
+      const results = await Promise.all(
+        COMPENDIUM_CATEGORY_ORDER.map((entry) => fetchSrdCompendiumIndex(entry.id, controller.signal)),
+      );
+      if (controller.signal.aborted) {
+        return;
+      }
+      const compendium = createEmptyCompendiumIndex();
+      results.forEach((list, index) => {
+        const category = COMPENDIUM_CATEGORY_ORDER[index]?.id;
+        if (category) {
+          compendium[category] = list;
+        }
+      });
+      this.state = {
+        ...this.state,
+        compendium,
+        compendiumLoading: false,
+      };
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to load D&D 5e reference content.';
+      this.state = {
+        ...this.state,
+        compendiumLoading: false,
+        compendiumError: message,
+      };
+    } finally {
+      if (this.compendiumAbortController === controller) {
+        this.compendiumAbortController = null;
+      }
+    }
+
+    this.requestRender();
+  }
+
   private async loadContentModules(): Promise<void> {
     if (typeof fetch !== 'function') {
       return;
@@ -557,6 +654,9 @@ export class DDRoot extends HTMLElement {
       heroOptions,
       heroOptionsLoading,
       heroOptionsError,
+      compendium,
+      compendiumLoading,
+      compendiumError,
     } = this.state;
     const normalizedCreation = this.getNormalizedHeroCreation();
     const heroRaces = heroOptions.races;
@@ -577,6 +677,15 @@ export class DDRoot extends HTMLElement {
       return { ability, raceBonus, classBonus, total };
     }).filter((entry) => entry.total !== 0);
     const startingItems = selectedClass?.startingItems ?? [];
+    const compendiumData = {
+      loading: compendiumLoading,
+      error: compendiumError,
+      categories: COMPENDIUM_CATEGORY_ORDER.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        entries: compendium[entry.id] ?? [],
+      })),
+    };
     render(
       html`
         <style>
@@ -1005,6 +1114,7 @@ export class DDRoot extends HTMLElement {
             <dd-node-map .data=${mapNodes}></dd-node-map>
             <dd-quest-tracker .data=${quests}></dd-quest-tracker>
             <dd-journal-log .data=${journal}></dd-journal-log>
+            <dd-dnd-compendium .data=${compendiumData}></dd-dnd-compendium>
           </aside>
         </div>
         <dd-toast-stack .data=${toasts}></dd-toast-stack>
