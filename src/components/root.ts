@@ -65,6 +65,7 @@ interface HeroCreationState extends HeroCreationDraft {
 
 const DEFAULT_HERO_NAME = 'Lone Adventurer';
 const DEFAULT_HERO_PORTRAIT = 'https://avatars.dicebear.com/api/adventurer/chronicles.svg';
+const HERO_NAME_MAX_LENGTH = 40;
 const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [
   'strength',
   'dexterity',
@@ -686,6 +687,24 @@ export class DDRoot extends HTMLElement {
         entries: compendium[entry.id] ?? [],
       })),
     };
+    const heroNameTrimmed = heroCreation.name.trim();
+    const heroNameIsDefault = heroNameTrimmed.length === 0 || heroCreation.name === DEFAULT_HERO_NAME;
+    const heroNameCharacterCount = Math.min(heroNameTrimmed.length, HERO_NAME_MAX_LENGTH);
+    const portraitTrimmed = heroCreation.portrait.trim();
+    const portraitProvided = portraitTrimmed.length > 0;
+    const integrationState = heroOptionsLoading ? 'loading' : heroOptionsError ? 'error' : 'ready';
+    const integrationLabel =
+      integrationState === 'loading'
+        ? 'Synchronizing SRD Data'
+        : integrationState === 'error'
+          ? 'Attention Required'
+          : 'Ready for Adventure';
+    const integrationNote =
+      integrationState === 'loading'
+        ? 'Loading D&D 5e SRD content…'
+        : integrationState === 'error'
+          ? `SRD sync failed: ${heroOptionsError ?? 'Unknown error.'}`
+          : 'SRD content synchronized.';
     render(
       html`
         <style>
@@ -758,15 +777,121 @@ export class DDRoot extends HTMLElement {
           }
 
           .integration-status {
-            background: rgba(32, 24, 44, 0.6);
-            border: 1px solid rgba(255, 210, 164, 0.2);
-            border-radius: 16px;
-            padding: 1rem 1.25rem;
+            position: relative;
+            background: linear-gradient(135deg, rgba(32, 24, 44, 0.88), rgba(16, 12, 28, 0.88));
+            border: 1px solid rgba(255, 210, 164, 0.18);
+            border-radius: 18px;
+            padding: 1.25rem 1.35rem;
             margin-bottom: 1.5rem;
+            overflow: hidden;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
           }
 
-          .integration-status p {
-            margin: 0.25rem 0;
+          .integration-status::before {
+            content: '';
+            position: absolute;
+            inset: -40% -10% auto -10%;
+            height: 160%;
+            background: radial-gradient(circle at top, rgba(240, 179, 90, 0.3), transparent 55%);
+            opacity: 0.65;
+            pointer-events: none;
+          }
+
+          .integration-status > * {
+            position: relative;
+            z-index: 1;
+          }
+
+          .status-header {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+          }
+
+          .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 600;
+            background: rgba(240, 179, 90, 0.16);
+            color: rgba(240, 179, 90, 0.95);
+          }
+
+          .status-badge.ready {
+            background: rgba(123, 231, 165, 0.18);
+            color: rgba(123, 231, 165, 0.95);
+          }
+
+          .status-badge.error {
+            background: rgba(242, 125, 114, 0.18);
+            color: rgba(255, 184, 176, 0.95);
+          }
+
+          .status-icon {
+            width: 0.85rem;
+            height: 0.85rem;
+            border-radius: 50%;
+            background: rgba(240, 179, 90, 0.95);
+            box-shadow: 0 0 0 4px rgba(240, 179, 90, 0.15);
+          }
+
+          .status-badge.ready .status-icon {
+            background: rgba(123, 231, 165, 1);
+            box-shadow: 0 0 0 4px rgba(123, 231, 165, 0.2);
+          }
+
+          .status-badge.error .status-icon {
+            background: rgba(242, 125, 114, 1);
+            box-shadow: 0 0 0 4px rgba(242, 125, 114, 0.2);
+          }
+
+          .status-badge.loading .status-icon {
+            position: relative;
+            background: transparent;
+            border: 2px solid rgba(240, 179, 90, 0.4);
+            border-top-color: rgba(240, 179, 90, 0.95);
+            box-shadow: none;
+            animation: spin 1s linear infinite;
+          }
+
+          .status-note {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.78);
+          }
+
+          .status-metric {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin: 0.85rem 0 0.65rem;
+          }
+
+          .metric {
+            display: grid;
+            gap: 0.15rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: 12px;
+            background: rgba(10, 6, 18, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            min-width: 88px;
+          }
+
+          .metric strong {
+            font-family: 'Cinzel', serif;
+            font-size: 1.05rem;
+            letter-spacing: 0.04em;
+          }
+
+          .metric small {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.65);
           }
 
           .integration-status code {
@@ -776,52 +901,15 @@ export class DDRoot extends HTMLElement {
             font-size: 0.85rem;
           }
 
-          .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-weight: 600;
-          }
-
-          .status::before {
-            content: '';
-            width: 0.6rem;
-            height: 0.6rem;
-            border-radius: 50%;
-            display: inline-block;
-          }
-
-          .status.loading::before {
-            background: #f0b35a;
-            animation: pulse 1.6s ease-in-out infinite;
-          }
-
-          .status.ready::before {
-            background: #7be7a5;
-          }
-
-          .status.error::before {
-            background: #f27d72;
-          }
-
-          @keyframes pulse {
-            0% {
-              opacity: 0.4;
-            }
-            50% {
-              opacity: 1;
-            }
-            100% {
-              opacity: 0.4;
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
             }
           }
 
           .integration-hint {
-            font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.82rem;
+            color: rgba(255, 255, 255, 0.72);
           }
 
           .grid {
@@ -833,45 +921,134 @@ export class DDRoot extends HTMLElement {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
-          label {
+          .field {
             display: flex;
             flex-direction: column;
-            gap: 0.4rem;
-            font-size: 0.95rem;
-            letter-spacing: 0.02em;
+            gap: 0.45rem;
           }
 
-          input,
-          select {
-            padding: 0.75rem 1rem;
+          .field-label {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            letter-spacing: 0.02em;
+            font-weight: 600;
+          }
+
+          .field-meta {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            background: rgba(240, 179, 90, 0.18);
+            color: rgba(240, 179, 90, 0.9);
+          }
+
+          .field-meta.muted {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          .field-meta.accent {
+            background: rgba(123, 231, 165, 0.2);
+            color: rgba(123, 231, 165, 0.88);
+          }
+
+          .input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.75rem 0.9rem;
             border-radius: 12px;
-            border: 1px solid rgba(255, 210, 164, 0.2);
+            border: 1px solid rgba(255, 210, 164, 0.18);
             background: rgba(18, 14, 28, 0.9);
+            transition: border 150ms ease, box-shadow 200ms ease;
+          }
+
+          .input-wrapper:focus-within {
+            border-color: rgba(240, 179, 90, 0.85);
+            box-shadow: 0 0 0 3px rgba(240, 179, 90, 0.18);
+          }
+
+          .field-icon {
+            font-size: 1rem;
+            color: rgba(240, 179, 90, 0.8);
+          }
+
+          .input-wrapper input,
+          .input-wrapper select {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            outline: none;
             color: inherit;
+            font: inherit;
+            padding: 0;
+          }
+
+          .input-wrapper select {
+            appearance: none;
+            padding-right: 1.5rem;
+          }
+
+          .input-wrapper.select {
+            position: relative;
+          }
+
+          .input-wrapper.select::after {
+            content: '▾';
+            position: absolute;
+            right: 1rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            pointer-events: none;
           }
 
           .field-hint {
-            display: block;
-            margin-top: -0.15rem;
             font-size: 0.75rem;
             color: var(--dd-muted);
+            margin-top: -0.1rem;
           }
 
           button.primary {
-            padding: 0.95rem 1.25rem;
-            border-radius: 12px;
-            border: 1px solid rgba(240, 179, 90, 0.65);
-            background: linear-gradient(90deg, #f0b35a, #f27d72);
-            color: #1b0f22;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.65rem;
+            padding: 1rem 1.5rem;
+            border-radius: 14px;
+            border: 1px solid rgba(240, 179, 90, 0.4);
+            background: linear-gradient(120deg, #f8c06c, #f27d72, #b16dea);
+            background-size: 200% 200%;
+            color: #120a18;
             font-family: 'Cinzel', serif;
-            font-size: 1rem;
-            letter-spacing: 0.05em;
+            font-size: 1.05rem;
+            letter-spacing: 0.08em;
             cursor: pointer;
-            transition: transform 150ms ease;
+            transition: transform 150ms ease, background-position 250ms ease, box-shadow 200ms ease;
           }
 
           button.primary:hover {
             transform: translateY(-2px);
+            background-position: 100% 50%;
+            box-shadow: 0 12px 30px rgba(178, 112, 234, 0.35);
+          }
+
+          button.primary:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(240, 179, 90, 0.3);
+          }
+
+          .primary .cta-icon {
+            font-size: 1rem;
+            transition: transform 150ms ease;
+          }
+
+          button.primary:hover .cta-icon {
+            transform: translateX(4px);
           }
 
           .mode-badge {
@@ -1125,17 +1302,27 @@ export class DDRoot extends HTMLElement {
                   <h1>Dungeons & Dragons: Chronicles of the Lone Adventurer</h1>
                   <p>Create your lone hero to begin the saga.</p>
                   <div class="integration-status">
-                    <p>
-                      Available SRD options:
-                      <strong>${heroOptions.races.length}</strong> races ·
-                      <strong>${heroOptions.classes.length}</strong> classes ·
-                      <strong>${heroOptions.backgrounds.length}</strong> backgrounds
-                    </p>
-                    ${heroOptionsLoading
-                      ? html`<span class="status loading">Loading D&D 5e SRD content…</span>`
-                      : heroOptionsError
-                          ? html`<span class="status error">SRD sync failed: ${heroOptionsError}</span>`
-                          : html`<span class="status ready">SRD content synchronized.</span>`}
+                    <div class="status-header">
+                      <span class="status-badge ${integrationState}">
+                        <span class="status-icon" aria-hidden="true"></span>
+                        ${integrationLabel}
+                      </span>
+                      <span class="status-note" aria-live="polite">${integrationNote}</span>
+                    </div>
+                    <div class="status-metric">
+                      <span class="metric">
+                        <strong>${heroOptions.races.length}</strong>
+                        <small>Races</small>
+                      </span>
+                      <span class="metric">
+                        <strong>${heroOptions.classes.length}</strong>
+                        <small>Classes</small>
+                      </span>
+                      <span class="metric">
+                        <strong>${heroOptions.backgrounds.length}</strong>
+                        <small>Backgrounds</small>
+                      </span>
+                    </div>
                     <p class="integration-hint">
                       To integrate additional material you have permission to use, drop JSON modules into
                       <code>public/modules</code> and they will load automatically on startup.
@@ -1148,61 +1335,119 @@ export class DDRoot extends HTMLElement {
                       @change=${(event: Event) => this.handleHeroCreationInput(event)}
                     >
                       <div class="grid two">
-                        <label>
-                          Hero Name
-                          <input
-                            name="name"
-                            placeholder="Aria Stormborn"
-                            minlength="2"
-                            .value=${heroCreation.name}
-                          />
-                          <span class="field-hint">Leave blank to begin as the Lone Adventurer.</span>
+                        <label class="field">
+                          <span class="field-label">
+                            Hero Name
+                            <span class="field-meta ${heroNameIsDefault ? 'muted' : ''}">
+                              ${heroNameIsDefault
+                                ? 'Default title'
+                                : `${heroNameCharacterCount}/${HERO_NAME_MAX_LENGTH}`}
+                            </span>
+                          </span>
+                          <div class="input-wrapper">
+                            <span class="field-icon" aria-hidden="true">✧</span>
+                            <input
+                              name="name"
+                              placeholder="Aria Stormborn"
+                              minlength="2"
+                              maxlength=${HERO_NAME_MAX_LENGTH}
+                              .value=${heroCreation.name}
+                            />
+                          </div>
+                          <span class="field-hint">
+                            ${heroNameIsDefault
+                              ? 'Leave blank to begin as the Lone Adventurer.'
+                              : 'Your chosen title will echo through tavern tales.'}
+                          </span>
                         </label>
-                        <label>
-                          Portrait URL
-                          <input
-                            name="portrait"
-                            placeholder="https://avatars.dicebear.com/api/adventurer/aria.svg"
-                            .value=${heroCreation.portrait}
-                          />
-                          <span class="field-hint">Leave blank to use the illustrated default portrait.</span>
+                        <label class="field">
+                          <span class="field-label">
+                            Portrait URL
+                            <span class="field-meta ${portraitProvided ? 'accent' : 'muted'}">
+                              ${portraitProvided ? 'Custom art' : 'Default art'}
+                            </span>
+                          </span>
+                          <div class="input-wrapper">
+                            <span class="field-icon" aria-hidden="true">🖼️</span>
+                            <input
+                              name="portrait"
+                              placeholder="https://avatars.dicebear.com/api/adventurer/aria.svg"
+                              inputmode="url"
+                              .value=${heroCreation.portrait}
+                            />
+                          </div>
+                          <span class="field-hint">
+                            ${portraitProvided
+                              ? 'Custom portrait ready—ensure the URL remains accessible.'
+                              : 'Leave blank to conjure the illustrated default portrait.'}
+                          </span>
                         </label>
                       </div>
                       <div class="grid two">
-                        <label>
-                          Race
-                          <select name="race" .value=${heroCreation.raceId}>
-                            ${heroOptions.races.length > 0
-                              ? heroOptions.races.map(
-                                  (race) => html`<option value=${race.id}>${race.name}</option>`,
-                                )
-                              : html`<option value="" disabled>No races available</option>`}
-                          </select>
+                        <label class="field">
+                          <span class="field-label">
+                            Race
+                            <span class="field-meta ${selectedRace ? 'accent' : 'muted'}">
+                              ${selectedRace?.name ?? 'Awaiting selection'}
+                            </span>
+                          </span>
+                          <div class="input-wrapper select">
+                            <span class="field-icon" aria-hidden="true">🧬</span>
+                            <select name="race" .value=${heroCreation.raceId}>
+                              ${heroOptions.races.length > 0
+                                ? heroOptions.races.map(
+                                    (race) => html`<option value=${race.id}>${race.name}</option>`,
+                                  )
+                                : html`<option value="" disabled>No races available</option>`}
+                            </select>
+                          </div>
+                          <span class="field-hint">Choose your lineage to unlock innate bonuses.</span>
                         </label>
-                        <label>
-                          Class
-                          <select name="class" .value=${heroCreation.classId}>
-                            ${heroOptions.classes.length > 0
-                              ? heroOptions.classes.map(
-                                  (heroClass) => html`<option value=${heroClass.id}>${heroClass.name}</option>`,
-                                )
-                              : html`<option value="" disabled>No classes available</option>`}
-                          </select>
+                        <label class="field">
+                          <span class="field-label">
+                            Class
+                            <span class="field-meta ${selectedClass ? 'accent' : 'muted'}">
+                              ${selectedClass?.name ?? 'Awaiting selection'}
+                            </span>
+                          </span>
+                          <div class="input-wrapper select">
+                            <span class="field-icon" aria-hidden="true">⚔️</span>
+                            <select name="class" .value=${heroCreation.classId}>
+                              ${heroOptions.classes.length > 0
+                                ? heroOptions.classes.map(
+                                    (heroClass) => html`<option value=${heroClass.id}>${heroClass.name}</option>`,
+                                  )
+                                : html`<option value="" disabled>No classes available</option>`}
+                            </select>
+                          </div>
+                          <span class="field-hint">Select a calling to define combat style and proficiencies.</span>
                         </label>
                       </div>
-                      <label>
-                        Background
-                        <select name="background" .value=${heroCreation.backgroundId}>
-                          ${heroOptions.backgrounds.length > 0
-                            ? heroOptions.backgrounds.map(
-                                (background) => html`
-                                  <option value=${background.id}>${background.name}</option>
-                                `,
-                              )
-                            : html`<option value="" disabled>No backgrounds available</option>`}
-                        </select>
+                      <label class="field">
+                        <span class="field-label">
+                          Background
+                          <span class="field-meta ${selectedBackground ? 'accent' : 'muted'}">
+                            ${selectedBackground?.name ?? 'Awaiting selection'}
+                          </span>
+                        </span>
+                        <div class="input-wrapper select">
+                          <span class="field-icon" aria-hidden="true">📜</span>
+                          <select name="background" .value=${heroCreation.backgroundId}>
+                            ${heroOptions.backgrounds.length > 0
+                              ? heroOptions.backgrounds.map(
+                                  (background) => html`
+                                    <option value=${background.id}>${background.name}</option>
+                                  `,
+                                )
+                              : html`<option value="" disabled>No backgrounds available</option>`}
+                          </select>
+                        </div>
+                        <span class="field-hint">Shape the history that informs your first steps.</span>
                       </label>
-                      <button class="primary" type="submit">Begin the Chronicle</button>
+                      <button class="primary" type="submit">
+                        <span>Begin the Chronicle</span>
+                        <span class="cta-icon" aria-hidden="true">➜</span>
+                      </button>
                     </form>
                     <section class="preview-panel">
                       <h2>Hero Preview</h2>
