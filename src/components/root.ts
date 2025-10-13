@@ -83,6 +83,62 @@ const COMPENDIUM_CATEGORY_ORDER: Array<{ id: SrdCompendiumCategory; label: strin
   { id: 'spells', label: 'Spells' },
 ];
 
+const HERO_NAME_PREFIXES = [
+  'Aria',
+  'Thorn',
+  'Kael',
+  'Lyra',
+  'Corin',
+  'Syl',
+  'Mira',
+  'Dain',
+  'Vara',
+  'Orin',
+];
+
+const HERO_NAME_SUFFIXES = [
+  'Storm',
+  'Shadow',
+  'Bright',
+  'Flame',
+  'Frost',
+  'bane',
+  'song',
+  'weaver',
+  'thorn',
+  'walker',
+];
+
+const HERO_NAME_EPITHETS = [
+  'the Wanderer',
+  'of the North',
+  'the Untamed',
+  'the Resolute',
+  'the Dawnblade',
+  'the Whisperwind',
+  'of Forgotten Paths',
+  'the Emberheart',
+];
+
+function randomElement<T>(items: T[]): T | undefined {
+  if (items.length === 0) return undefined;
+  const index = Math.floor(Math.random() * items.length);
+  return items[index];
+}
+
+function generateRandomHeroName(): string {
+  const prefix = randomElement(HERO_NAME_PREFIXES) ?? 'Lone';
+  const suffix = randomElement(HERO_NAME_SUFFIXES) ?? 'Adventurer';
+  const epithet = Math.random() < 0.45 ? randomElement(HERO_NAME_EPITHETS) : null;
+  const baseName = `${prefix}${suffix.endsWith(prefix) ? '' : suffix}`;
+  return epithet ? `${baseName} ${epithet}` : baseName;
+}
+
+function generateRandomPortraitUrl(): string {
+  const seed = Math.random().toString(36).slice(2, 10);
+  return `https://avatars.dicebear.com/api/adventurer-neutral/${seed}.svg`;
+}
+
 function createEmptyCompendiumIndex(): Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]> {
   return COMPENDIUM_CATEGORY_ORDER.reduce(
     (acc, entry) => {
@@ -424,6 +480,35 @@ export class DDRoot extends HTMLElement {
     this.state = {
       ...this.state,
       heroCreation: createInitialHeroCreationState(this.state.heroOptions),
+    };
+    this.requestRender();
+  }
+
+  private randomizeHeroCreation(): void {
+    const options = this.state.heroOptions;
+    const race = randomElement(options.races);
+    const heroClass = randomElement(options.classes);
+    const background = randomElement(options.backgrounds);
+    const draft: HeroCreationDraft = {
+      name: generateRandomHeroName(),
+      portrait: generateRandomPortraitUrl(),
+      raceId: race?.id ?? '',
+      classId: heroClass?.id ?? '',
+      backgroundId: background?.id ?? '',
+    };
+    const normalized = normalizeHeroCreation(draft, options);
+    const preview = buildHeroPreview(normalized);
+    this.state = {
+      ...this.state,
+      heroCreation: {
+        ...draft,
+        name: normalized.name,
+        portrait: normalized.portrait,
+        raceId: normalized.raceId,
+        classId: normalized.classId,
+        backgroundId: normalized.backgroundId,
+        preview,
+      },
     };
     this.requestRender();
   }
@@ -857,7 +942,22 @@ export class DDRoot extends HTMLElement {
             color: var(--dd-muted);
           }
 
-          button.primary {
+          .creation-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin: 1.25rem 0 1.5rem;
+          }
+
+          .creation-toolbar p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.75);
+          }
+
+          button.primary,
+          button.secondary {
             padding: 0.95rem 1.25rem;
             border-radius: 12px;
             border: 1px solid rgba(240, 179, 90, 0.65);
@@ -872,6 +972,18 @@ export class DDRoot extends HTMLElement {
 
           button.primary:hover {
             transform: translateY(-2px);
+          }
+
+          button.secondary {
+            background: rgba(16, 12, 24, 0.85);
+            color: rgba(240, 179, 90, 0.95);
+            border: 1px solid rgba(240, 179, 90, 0.45);
+            font-size: 0.95rem;
+          }
+
+          button.secondary:hover {
+            transform: translateY(-2px);
+            background: rgba(240, 179, 90, 0.14);
           }
 
           .mode-badge {
@@ -1124,6 +1236,16 @@ export class DDRoot extends HTMLElement {
                 <div class="creation-panel">
                   <h1>Dungeons & Dragons: Chronicles of the Lone Adventurer</h1>
                   <p>Create your lone hero to begin the saga.</p>
+                  <div class="creation-toolbar">
+                    <button
+                      class="secondary"
+                      type="button"
+                      @click=${() => this.randomizeHeroCreation()}
+                    >
+                      Inspire Me
+                    </button>
+                    <p>Instantly draft a fresh hero concept with randomized options.</p>
+                  </div>
                   <div class="integration-status">
                     <p>
                       Available SRD options:

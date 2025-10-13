@@ -33,6 +33,15 @@ const CATEGORY_ICONS: Partial<Record<SrdCompendiumCategory, string>> = {
   spells: '🔮',
 };
 
+interface RecentEntry {
+  category: SrdCompendiumCategory;
+  index: string;
+  name: string;
+  viewedAt: number;
+}
+
+const RECENT_STORAGE_KEY = 'dd-compendium-recent-v1';
+
 export class DDDndCompendium extends HTMLElement {
   private loading = false;
   private error: string | null = null;
@@ -45,16 +54,31 @@ export class DDDndCompendium extends HTMLElement {
   private filter = '';
   private detailAbortController: AbortController | null = null;
   private pendingDetailKey: string | null = null;
+  private recentEntries: RecentEntry[] = [];
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
   }
 
+  connectedCallback(): void {
+    this.restoreRecentEntries();
+  }
+
   set data(payload: CompendiumData) {
     this.loading = payload.loading;
     this.error = payload.error ?? null;
     this.categories = payload.categories;
+
+    const previousRecentLength = this.recentEntries.length;
+    this.recentEntries = this.recentEntries.filter((entry) =>
+      payload.categories.some((category) =>
+        category.id === entry.category && category.entries.some((item) => item.index === entry.index),
+      ),
+    );
+    if (this.recentEntries.length !== previousRecentLength) {
+      this.persistRecentEntries();
+    }
 
     const currentCategory = this.categories.find((entry) => entry.id === this.selectedCategory);
     if (!currentCategory || currentCategory.entries.length === 0) {
@@ -98,6 +122,90 @@ export class DDDndCompendium extends HTMLElement {
     return this.categories.find((entry) => entry.id === this.selectedCategory) ?? null;
   }
 
+  private restoreRecentEntries(): void {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(RECENT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        this.recentEntries = parsed
+          .filter((entry): entry is RecentEntry =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            typeof (entry as RecentEntry).category === 'string' &&
+            typeof (entry as RecentEntry).index === 'string' &&
+            typeof (entry as RecentEntry).name === 'string' &&
+            typeof (entry as RecentEntry).viewedAt === 'number',
+          )
+          .sort((a, b) => b.viewedAt - a.viewedAt)
+          .slice(0, 5);
+      }
+    } catch (error) {
+      console.warn('Failed to restore compendium history', error);
+      this.recentEntries = [];
+    }
+  }
+
+  private persistRecentEntries(): void {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return;
+    }
+    try {
+      window.localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(this.recentEntries));
+    } catch (error) {
+      console.warn('Failed to persist compendium history', error);
+    }
+  }
+
+  private recordRecentEntry(
+    category: SrdCompendiumCategory,
+    index: string,
+    name: string,
+  ): void {
+    const entry: RecentEntry = {
+      category,
+      index,
+      name,
+      viewedAt: Date.now(),
+    };
+    const filtered = this.recentEntries.filter(
+      (item) => !(item.category === category && item.index === index),
+    );
+    const next = [entry, ...filtered].slice(0, 5);
+    const changed =
+      next.length !== this.recentEntries.length ||
+      next.some((item, position) => {
+        const current = this.recentEntries[position];
+        return (
+          !current ||
+          current.category !== item.category ||
+          current.index !== item.index ||
+          current.name !== item.name ||
+          current.viewedAt !== item.viewedAt
+        );
+      });
+    if (changed) {
+      this.recentEntries = next;
+      this.persistRecentEntries();
+    }
+  }
+
+  private handleRecentSelect(entry: RecentEntry): void {
+    if (this.detailLoading && this.selectedCategory === entry.category && this.selectedEntry === entry.index) {
+      return;
+    }
+    this.selectedCategory = entry.category;
+    this.selectedEntry = entry.index;
+    this.filter = '';
+    this.detail = null;
+    this.detailError = null;
+    this.update();
+    void this.loadDetail(entry.category, entry.index);
+  }
+
   private async loadDetail(category: SrdCompendiumCategory, entryIndex: string): Promise<void> {
     if (this.detailAbortController) {
       this.detailAbortController.abort();
@@ -119,6 +227,7 @@ export class DDDndCompendium extends HTMLElement {
       }
       this.detail = detail;
       this.detailLoading = false;
+      this.recordRecentEntry(category, entryIndex, detail.name);
     } catch (error) {
       if (controller.signal.aborted || this.pendingDetailKey !== requestKey) {
         return;
@@ -170,6 +279,27 @@ export class DDDndCompendium extends HTMLElement {
   private filterEntries(entries: SrdCompendiumEntrySummary[]): SrdCompendiumEntrySummary[] {
     if (!this.filter) return entries;
     return entries.filter((entry) => entry.name.toLowerCase().includes(this.filter));
+  }
+
+  private formatRelativeTime(timestamp: number): string {
+    const now = Date.now();
+    const delta = Math.max(0, now - timestamp);
+    const minute = 60_000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (delta < minute) {
+      return 'Just now';
+    }
+    if (delta < hour) {
+      const minutes = Math.round(delta / minute);
+      return `${minutes} min ago`;
+    }
+    if (delta < day) {
+      const hours = Math.round(delta / hour);
+      return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.round(delta / day);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
   }
 
   private renderDetail(detail: SrdCompendiumDetail): unknown {
@@ -339,6 +469,7 @@ export class DDDndCompendium extends HTMLElement {
     const selectedCategory = this.getSelectedCategory();
     const entries = selectedCategory ? this.filterEntries(selectedCategory.entries) : [];
     const selectedKey = this.selectedCategory && this.selectedEntry ? `${this.selectedCategory}/${this.selectedEntry}` : null;
+    const totalInCategory = selectedCategory?.entries.length ?? 0;
 
     return html`
       <style>
@@ -426,6 +557,7 @@ export class DDDndCompendium extends HTMLElement {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
+          min-height: 0;
         }
 
         .search-box input {
@@ -436,6 +568,19 @@ export class DDDndCompendium extends HTMLElement {
           background: rgba(16, 12, 24, 0.75);
           color: inherit;
           font: inherit;
+        }
+
+        .filter-status {
+          font-size: 0.75rem;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.6);
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .filter-status strong {
+          color: rgba(240, 179, 90, 0.95);
         }
 
         .entry-list {
@@ -468,6 +613,69 @@ export class DDDndCompendium extends HTMLElement {
 
         .entry-button:hover {
           border-color: rgba(137, 227, 185, 0.4);
+        }
+
+        .recent-panel {
+          border: 1px solid rgba(255, 210, 164, 0.12);
+          border-radius: 10px;
+          padding: 0.5rem 0.6rem;
+          background: rgba(16, 12, 24, 0.55);
+          display: grid;
+          gap: 0.45rem;
+        }
+
+        .recent-panel h4 {
+          margin: 0;
+          font-size: 0.8rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.7);
+        }
+
+        .recent-panel ul {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 0.35rem;
+        }
+
+        .recent-button {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+          border: 1px solid transparent;
+          border-radius: 8px;
+          background: rgba(24, 18, 36, 0.65);
+          color: inherit;
+          padding: 0.35rem 0.5rem;
+          cursor: pointer;
+          font: inherit;
+          font-size: 0.85rem;
+          transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .recent-button[selected] {
+          border-color: rgba(137, 227, 185, 0.55);
+          background: rgba(137, 227, 185, 0.18);
+        }
+
+        .recent-button:hover {
+          border-color: rgba(240, 179, 90, 0.4);
+        }
+
+        .recent-title {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+        }
+
+        .recent-meta {
+          font-size: 0.72rem;
+          color: rgba(255, 255, 255, 0.6);
+          letter-spacing: 0.05em;
         }
 
         .detail-panel {
@@ -592,6 +800,12 @@ export class DDDndCompendium extends HTMLElement {
                     ?disabled=${!selectedCategory}
                   />
                 </div>
+                ${selectedCategory
+                  ? html`<div class="filter-status" role="status">
+                      <span>Showing <strong>${entries.length}</strong> entries</span>
+                      <span>Total: ${totalInCategory}</span>
+                    </div>`
+                  : null}
                 <ul class="entry-list">
                   ${selectedCategory
                     ? entries.length > 0
@@ -611,6 +825,30 @@ export class DDDndCompendium extends HTMLElement {
                       : html`<li class="placeholder">No entries match your filter.</li>`
                     : html`<li class="placeholder">Select a category to browse entries.</li>`}
                 </ul>
+                ${this.recentEntries.length > 0
+                  ? html`<div class="recent-panel">
+                      <h4>Recently Viewed</h4>
+                      <ul>
+                        ${this.recentEntries.map(
+                          (entry) => html`
+                            <li>
+                              <button
+                                class="recent-button"
+                                type="button"
+                                ?selected=${selectedKey === `${entry.category}/${entry.index}`}
+                                @click=${() => this.handleRecentSelect(entry)}
+                              >
+                                <span class="recent-title">
+                                  ${CATEGORY_ICONS[entry.category] ?? '📚'} ${entry.name}
+                                </span>
+                                <span class="recent-meta">${this.formatRelativeTime(entry.viewedAt)}</span>
+                              </button>
+                            </li>
+                          `,
+                        )}
+                      </ul>
+                    </div>`
+                  : null}
               </div>
               <div class="detail-panel">
                 ${this.detailLoading

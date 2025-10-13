@@ -1,8 +1,9 @@
 import { html, render } from 'lit-html';
-import type { Quest, QuestObjective } from '../systems/types';
+import type { Quest, QuestObjective, QuestStatus } from '../systems/types';
 
 export class DDQuestTracker extends HTMLElement {
   private quests: Quest[] = [];
+  private filter: QuestStatus | 'all' = 'all';
 
   constructor() {
     super();
@@ -16,6 +17,11 @@ export class DDQuestTracker extends HTMLElement {
 
   private update(): void {
     if (!this.shadowRoot) return;
+    const counts = this.computeCounts();
+    const filteredQuests = this.applyFilter(this.quests);
+    const emptyMessage = this.filter === 'all'
+      ? 'No active quests—forge your path!'
+      : `No ${this.filter} quests to show right now.`;
     render(
       html`
         <style>
@@ -28,11 +34,56 @@ export class DDQuestTracker extends HTMLElement {
             backdrop-filter: blur(6px);
           }
 
+          header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
           h3 {
-            margin: 0 0 0.75rem;
+            margin: 0;
             font-family: 'Cinzel', serif;
             font-size: 1.1rem;
             letter-spacing: 0.04em;
+          }
+
+          .filters {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+          }
+
+          .filter-button {
+            appearance: none;
+            border: 1px solid rgba(240, 179, 90, 0.25);
+            background: rgba(32, 24, 44, 0.65);
+            color: rgba(240, 179, 90, 0.85);
+            border-radius: 999px;
+            padding: 0.3rem 0.65rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+          }
+
+          .filter-button .count {
+            margin-left: 0.35rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+          }
+
+          .filter-button[aria-pressed='true'] {
+            border-color: rgba(137, 227, 185, 0.65);
+            background: rgba(137, 227, 185, 0.18);
+            color: rgba(137, 227, 185, 0.9);
+          }
+
+          .filter-button:hover {
+            transform: translateY(-1px);
+            border-color: rgba(240, 179, 90, 0.45);
           }
 
           ul {
@@ -197,10 +248,27 @@ export class DDQuestTracker extends HTMLElement {
             color: rgba(255, 255, 255, 0.55);
           }
         </style>
-        <h3>Quest Journal</h3>
+        <header>
+          <h3>Quest Journal</h3>
+          <div class="filters" role="group" aria-label="Quest status filters">
+            ${(['all', 'active', 'completed', 'failed'] as Array<'all' | QuestStatus>).map(
+              (status) => html`
+                <button
+                  class="filter-button"
+                  type="button"
+                  aria-pressed=${this.filter === status}
+                  @click=${() => this.handleFilterChange(status)}
+                >
+                  ${this.formatStatusLabel(status)}
+                  <span class="count">${counts[status]}</span>
+                </button>
+              `,
+            )}
+          </div>
+        </header>
         <ul>
-          ${this.quests.length > 0
-            ? this.quests.map((quest) => {
+          ${filteredQuests.length > 0
+            ? filteredQuests.map((quest) => {
                 const objectives = this.normalizeObjectives(quest);
                 const progress = this.calculateProgress(quest, objectives);
                 const progressLabel = `${Math.round(progress * 100)}%`;
@@ -250,11 +318,44 @@ export class DDQuestTracker extends HTMLElement {
                   </li>
                 `;
               })
-            : html`<li><p>No active quests—forge your path!</p></li>`}
+            : html`<li><p>${emptyMessage}</p></li>`}
         </ul>
       `,
       this.shadowRoot,
     );
+  }
+
+  private handleFilterChange(filter: QuestStatus | 'all'): void {
+    if (this.filter === filter) return;
+    this.filter = filter;
+    this.update();
+  }
+
+  private applyFilter(quests: Quest[]): Quest[] {
+    if (this.filter === 'all') {
+      return quests;
+    }
+    return quests.filter((quest) => quest.status === this.filter);
+  }
+
+  private computeCounts(): Record<'all' | QuestStatus, number> {
+    const counts: Record<'all' | QuestStatus, number> = {
+      all: this.quests.length,
+      active: 0,
+      completed: 0,
+      failed: 0,
+    };
+    for (const quest of this.quests) {
+      counts[quest.status] += 1;
+    }
+    return counts;
+  }
+
+  private formatStatusLabel(status: 'all' | QuestStatus): string {
+    if (status === 'all') {
+      return 'All';
+    }
+    return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
   private normalizeObjectives(quest: Quest): QuestObjective[] {
