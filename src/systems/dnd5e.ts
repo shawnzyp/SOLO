@@ -423,12 +423,26 @@ function mapClass(detail: ApiClassDetail): HeroClassOption {
     };
   });
 
+  const loadouts =
+    startingItems.length > 0
+      ? [
+          {
+            id: `srd-${detail.index}-standard-kit`,
+            name: `${detail.name} Standard Kit`,
+            summary: 'Equipment recommended for new adventurers of this class.',
+            defaultSelected: true,
+            items: startingItems,
+          },
+        ]
+      : [];
+
   return {
     id: `srd-${detail.index}`,
     name: detail.name,
     description: descriptionParts.filter(Boolean).join(' '),
     bonuses,
     startingItems,
+    loadouts,
   };
 }
 

@@ -233,6 +233,9 @@ export interface HeroCreationOptions {
   raceId: string;
   classId: string;
   backgroundId: string;
+  baseAttributes?: Record<Ability, number>;
+  classLoadoutId?: string | null;
+  backgroundEquipmentIds?: string[];
 }
 
 const CLASS_HIT_POINTS: Record<string, number> = {
@@ -262,7 +265,8 @@ export function createHero(options: HeroCreationOptions): Hero {
     throw new Error('Invalid hero creation data.');
   }
 
-  const attributes: Record<Ability, number> = { ...BASE_ATTRIBUTES };
+  const baseAttributes = options.baseAttributes ?? BASE_ATTRIBUTES;
+  const attributes: Record<Ability, number> = { ...baseAttributes };
 
   Object.entries(race.bonuses ?? {}).forEach(([ability, value]) => {
     attributes[ability as Ability] += value ?? 0;
@@ -272,6 +276,28 @@ export function createHero(options: HeroCreationOptions): Hero {
   });
 
   const focusSkills = classSkillFocus.get(heroClass.id) ?? [];
+
+  const loadouts = heroClass.loadouts ?? [];
+  const selectedLoadout =
+    loadouts.find((entry) => entry.id === options.classLoadoutId) ??
+    loadouts.find((entry) => entry.defaultSelected) ??
+    loadouts[0] ??
+    null;
+  const classItems = selectedLoadout?.items ?? heroClass.startingItems ?? [];
+
+  const backgroundEquipment = background.equipment ?? [];
+  const fallbackEquipmentIds = backgroundEquipment
+    .filter((entry) => entry.defaultSelected)
+    .map((entry) => entry.id);
+  const selectedEquipmentSource =
+    options.backgroundEquipmentIds && options.backgroundEquipmentIds.length > 0
+      ? options.backgroundEquipmentIds
+      : fallbackEquipmentIds;
+  const selectedEquipmentIds = new Set(selectedEquipmentSource);
+  const backgroundItems = backgroundEquipment
+    .filter((entry) => selectedEquipmentIds.has(entry.id))
+    .flatMap((entry) => entry.items ?? []);
+  const startingItems = [...classItems, ...backgroundItems];
 
   const skills: Record<Skill, number> = SKILLS.reduce((acc, skill) => {
     const abilityScore = attributes[skill.ability];
@@ -285,7 +311,7 @@ export function createHero(options: HeroCreationOptions): Hero {
   const baseHP = CLASS_HIT_POINTS[heroClass.id] ?? 12;
   const maxHP = Math.max(baseHP + constitutionModifier * 2, baseHP);
   const dexModifier = Math.floor((attributes.dexterity - 10) / 2);
-  const armorBonus = heroClass.startingItems?.some((item) => item.type === 'armor') ? 2 : 0;
+  const armorBonus = startingItems.some((item) => item.type === 'armor') ? 2 : 0;
   const armorClass = 10 + dexModifier + armorBonus;
 
   return {
@@ -301,7 +327,7 @@ export function createHero(options: HeroCreationOptions): Hero {
     maxHP,
     currentHP: maxHP,
     armorClass,
-    inventory: [...(heroClass.startingItems ?? [])],
+    inventory: startingItems,
     gold: 25,
   };
 }
