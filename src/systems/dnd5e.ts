@@ -423,12 +423,25 @@ function mapClass(detail: ApiClassDetail): HeroClassOption {
     };
   });
 
+  const loadouts =
+    startingItems.length > 0
+      ? [
+          {
+            id: `srd-${detail.index}-standard`,
+            name: 'Standard Issue',
+            description: 'Starting equipment as recommended by the SRD.',
+            items: startingItems,
+          },
+        ]
+      : [];
+
   return {
     id: `srd-${detail.index}`,
     name: detail.name,
     description: descriptionParts.filter(Boolean).join(' '),
     bonuses,
     startingItems,
+    loadouts,
   };
 }
 

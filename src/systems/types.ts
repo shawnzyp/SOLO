@@ -69,12 +69,20 @@ export interface InventoryItem {
   };
 }
 
+export interface StartingLoadoutOption {
+  id: string;
+  name: string;
+  description?: string;
+  items: InventoryItem[];
+}
+
 export interface HeroClassOption {
   id: string;
   name: string;
   description: string;
   bonuses: Partial<Record<Ability, number>>;
   startingItems: InventoryItem[];
+  loadouts?: StartingLoadoutOption[];
 }
 
 export interface HeroBackgroundOption {
@@ -82,6 +90,7 @@ export interface HeroBackgroundOption {
   name: string;
   description: string;
   feature: string;
+  startingItems?: InventoryItem[];
 }
 
 export interface Hero {

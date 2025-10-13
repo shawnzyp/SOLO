@@ -22,9 +22,10 @@ import type {
   Achievement,
   JournalEntry,
   DiscoveredNode,
+  StartingLoadoutOption,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
-import { SKILLS, type CombatEncounter, type WorldState } from '../systems/types';
+import { SKILLS, type Ability, type CombatEncounter, type WorldState } from '../systems/types';
 import { CombatSession, type CombatSnapshot, type CombatAction } from '../systems/combat';
 import { AudioManager } from '../systems/audio';
 
@@ -49,12 +50,19 @@ type RenderChoice = StoryChoice & { disabled?: boolean };
 
 type MapNode = DiscoveredNode & { isCurrent: boolean };
 
+type AbilityGenerationMethod = 'standard-array' | 'rolled' | 'point-buy';
+
 interface HeroCreationDraft {
   name: string;
   portrait: string;
   raceId: string;
   classId: string;
   backgroundId: string;
+  abilityMethod: AbilityGenerationMethod;
+  baseAbilities: Record<Ability, number>;
+  rolledSet: number[];
+  loadoutId: string | null;
+  includeBackgroundKit: boolean;
 }
 
 interface NormalizedHeroCreation extends HeroCreationDraft {}
@@ -74,6 +82,19 @@ const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [
   'charisma',
 ];
 
+const STANDARD_ARRAY_VALUES = [15, 14, 13, 12, 10, 8];
+const POINT_BUY_BUDGET = 27;
+const POINT_BUY_COST_BY_SCORE: Record<number, number> = {
+  8: 0,
+  9: 1,
+  10: 2,
+  11: 3,
+  12: 4,
+  13: 5,
+  14: 7,
+  15: 9,
+};
+
 const COMPENDIUM_CATEGORY_ORDER: Array<{ id: SrdCompendiumCategory; label: string }> = [
   { id: 'rules', label: 'Core Rules' },
   { id: 'rule-sections', label: 'Rule Sections' },
@@ -82,6 +103,96 @@ const COMPENDIUM_CATEGORY_ORDER: Array<{ id: SrdCompendiumCategory; label: strin
   { id: 'magic-items', label: 'Magic Items' },
   { id: 'spells', label: 'Spells' },
 ];
+
+function createDefaultAbilityMap(): Record<Ability, number> {
+  return ATTRIBUTE_ORDER.reduce((acc, ability, index) => {
+    acc[ability] = STANDARD_ARRAY_VALUES[index] ?? 10;
+    return acc;
+  }, {} as Record<Ability, number>);
+}
+
+function roll4d6DropLowest(): number {
+  const rolls = Array.from({ length: 4 }, () => Math.floor(Math.random() * 6) + 1).sort((a, b) => b - a);
+  return rolls[0] + rolls[1] + rolls[2];
+}
+
+function generateRolledSet(): number[] {
+  return Array.from({ length: ATTRIBUTE_ORDER.length }, () => roll4d6DropLowest()).sort((a, b) => b - a);
+}
+
+function normalizeAbilityMapByPool(
+  requested: Record<Ability, number>,
+  pool: number[],
+): Record<Ability, number> {
+  const available = [...pool].sort((a, b) => b - a);
+  const normalized = {} as Record<Ability, number>;
+  ATTRIBUTE_ORDER.forEach((ability) => {
+    const desired = Math.round(requested[ability] ?? available[0] ?? 10);
+    const index = available.indexOf(desired);
+    if (index >= 0) {
+      normalized[ability] = available.splice(index, 1)[0];
+    } else {
+      normalized[ability] = available.shift() ?? pool[pool.length - 1] ?? 10;
+    }
+  });
+  return normalized;
+}
+
+function calculatePointBuyCost(map: Record<Ability, number>): number {
+  return ATTRIBUTE_ORDER.reduce((total, ability) => {
+    const score = Math.min(15, Math.max(8, Math.round(map[ability] ?? 8)));
+    return total + (POINT_BUY_COST_BY_SCORE[score] ?? 0);
+  }, 0);
+}
+
+function normalizePointBuyAbilities(requested: Record<Ability, number>): Record<Ability, number> {
+  const normalized = {} as Record<Ability, number>;
+  ATTRIBUTE_ORDER.forEach((ability) => {
+    const value = Math.round(requested[ability] ?? 8);
+    normalized[ability] = Math.min(15, Math.max(8, value));
+  });
+
+  let cost = calculatePointBuyCost(normalized);
+  if (cost <= POINT_BUY_BUDGET) {
+    return normalized;
+  }
+
+  while (cost > POINT_BUY_BUDGET) {
+    const reducible = [...ATTRIBUTE_ORDER]
+      .sort((a, b) => normalized[b] - normalized[a] || ATTRIBUTE_ORDER.indexOf(a) - ATTRIBUTE_ORDER.indexOf(b))
+      .find((ability) => normalized[ability] > 8);
+    if (!reducible) {
+      break;
+    }
+    normalized[reducible] -= 1;
+    cost = calculatePointBuyCost(normalized);
+  }
+
+  return normalized;
+}
+
+function calculatePointBuyRemaining(map: Record<Ability, number>): number {
+  return POINT_BUY_BUDGET - calculatePointBuyCost(map);
+}
+
+function listClassLoadouts(heroClass?: HeroOptionSnapshot['classes'][number] | null): StartingLoadoutOption[] {
+  if (!heroClass) {
+    return [];
+  }
+  if (heroClass.loadouts && heroClass.loadouts.length > 0) {
+    return heroClass.loadouts;
+  }
+  if (heroClass.startingItems && heroClass.startingItems.length > 0) {
+    return [
+      {
+        id: `${heroClass.id}-default-loadout`,
+        name: `${heroClass.name} Standard`,
+        items: heroClass.startingItems,
+      },
+    ];
+  }
+  return [];
+}
 
 function createEmptyCompendiumIndex(): Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]> {
   return COMPENDIUM_CATEGORY_ORDER.reduce(
@@ -103,12 +214,64 @@ function normalizeHeroCreation(
   const fallbackClass = options.classes[0]?.id ?? '';
   const fallbackBackground = options.backgrounds[0]?.id ?? '';
 
+  const normalizedRaceId = draft.raceId || fallbackRace;
+  const normalizedClassId = draft.classId || fallbackClass;
+  const normalizedBackgroundId = draft.backgroundId || fallbackBackground;
+
+  const abilityMethod: AbilityGenerationMethod = draft.abilityMethod ?? 'standard-array';
+  const defaultAbilities = createDefaultAbilityMap();
+  const requestedAbilities = ATTRIBUTE_ORDER.reduce((acc, ability) => {
+    const value = draft.baseAbilities?.[ability];
+    acc[ability] = typeof value === 'number' ? value : defaultAbilities[ability];
+    return acc;
+  }, {} as Record<Ability, number>);
+
+  const existingRolls =
+    draft.rolledSet && draft.rolledSet.length === ATTRIBUTE_ORDER.length
+      ? [...draft.rolledSet]
+      : generateRolledSet();
+
+  let baseAbilities: Record<Ability, number>;
+  let rolledSet = existingRolls;
+
+  switch (abilityMethod) {
+    case 'standard-array':
+      baseAbilities = normalizeAbilityMapByPool(requestedAbilities, STANDARD_ARRAY_VALUES);
+      break;
+    case 'rolled':
+      rolledSet = existingRolls.length === ATTRIBUTE_ORDER.length ? existingRolls : generateRolledSet();
+      baseAbilities = normalizeAbilityMapByPool(requestedAbilities, rolledSet);
+      break;
+    case 'point-buy':
+    default:
+      baseAbilities = normalizePointBuyAbilities(requestedAbilities);
+      break;
+  }
+
+  const heroClass = options.classes.find((entry) => entry.id === normalizedClassId);
+  const classLoadouts = listClassLoadouts(heroClass);
+  let loadoutId = draft.loadoutId ?? null;
+  if (classLoadouts.length === 0) {
+    loadoutId = null;
+  } else if (!classLoadouts.some((entry) => entry.id === loadoutId)) {
+    loadoutId = classLoadouts[0].id;
+  }
+
+  const background = options.backgrounds.find((entry) => entry.id === normalizedBackgroundId);
+  const hasBackgroundKit = Boolean(background?.startingItems && background.startingItems.length > 0);
+  const includeBackgroundKit = hasBackgroundKit ? draft.includeBackgroundKit !== false : false;
+
   return {
     name: trimmedName.length > 0 ? trimmedName : DEFAULT_HERO_NAME,
     portrait: trimmedPortrait.length > 0 ? trimmedPortrait : DEFAULT_HERO_PORTRAIT,
-    raceId: draft.raceId || fallbackRace,
-    classId: draft.classId || fallbackClass,
-    backgroundId: draft.backgroundId || fallbackBackground,
+    raceId: normalizedRaceId,
+    classId: normalizedClassId,
+    backgroundId: normalizedBackgroundId,
+    abilityMethod,
+    baseAbilities,
+    rolledSet,
+    loadoutId,
+    includeBackgroundKit,
   };
 }
 
@@ -121,16 +284,23 @@ function buildHeroPreview(normalized: NormalizedHeroCreation): Hero | null {
 }
 
 function createInitialHeroCreationState(options: HeroOptionSnapshot): HeroCreationState {
+  const initialClass = options.classes[0];
+  const loadouts = listClassLoadouts(initialClass);
   const base: HeroCreationDraft = {
     name: DEFAULT_HERO_NAME,
     portrait: '',
     raceId: options.races[0]?.id ?? '',
-    classId: options.classes[0]?.id ?? '',
+    classId: initialClass?.id ?? '',
     backgroundId: options.backgrounds[0]?.id ?? '',
+    abilityMethod: 'standard-array',
+    baseAbilities: createDefaultAbilityMap(),
+    rolledSet: generateRolledSet(),
+    loadoutId: loadouts[0]?.id ?? null,
+    includeBackgroundKit: Boolean(options.backgrounds[0]?.startingItems?.length),
   };
   const normalized = normalizeHeroCreation(base, options);
   return {
-    ...base,
+    ...normalized,
     preview: buildHeroPreview(normalized),
   };
 }
@@ -444,58 +614,92 @@ export class DDRoot extends HTMLElement {
     this.updateHeroCreationDraft(form);
   }
 
+  private handleAbilityReroll(): void {
+    const current = this.getHeroCreationDraft();
+    this.commitHeroCreationDraft({
+      ...current,
+      abilityMethod: 'rolled',
+      rolledSet: generateRolledSet(),
+    });
+  }
+
   private updateHeroCreationDraft(form: HTMLFormElement): void {
     const formData = new FormData(form);
+    const current = this.state.heroCreation;
+    const baseAbilities = { ...current.baseAbilities };
+    ATTRIBUTE_ORDER.forEach((ability) => {
+      const value = formData.get(`ability-${ability}`);
+      if (typeof value === 'string' && value.length > 0) {
+        const parsed = Number(value);
+        if (!Number.isNaN(parsed)) {
+          baseAbilities[ability] = parsed;
+        }
+      }
+    });
+
+    const methodValue = formData.get('ability-method');
+    const abilityMethod: AbilityGenerationMethod =
+      methodValue === 'rolled' || methodValue === 'point-buy' || methodValue === 'standard-array'
+        ? (methodValue as AbilityGenerationMethod)
+        : current.abilityMethod;
+
+    const includeBackgroundKit = formData.get('background-kit') === 'on';
+    const loadoutEntry = formData.get('class-loadout');
+    const loadoutId =
+      typeof loadoutEntry === 'string' && loadoutEntry.length > 0
+        ? loadoutEntry
+        : current.loadoutId;
+
     const draft: HeroCreationDraft = {
       name: String(formData.get('name') ?? ''),
       portrait: String(formData.get('portrait') ?? ''),
       raceId: String(formData.get('race') ?? ''),
       classId: String(formData.get('class') ?? ''),
       backgroundId: String(formData.get('background') ?? ''),
+      abilityMethod,
+      baseAbilities,
+      rolledSet: current.rolledSet,
+      loadoutId,
+      includeBackgroundKit,
     };
-    const normalized = normalizeHeroCreation(draft, this.state.heroOptions);
-    const preview = buildHeroPreview(normalized);
-    this.state = {
-      ...this.state,
-      heroCreation: {
-        ...draft,
-        preview,
-      },
-    };
-    this.requestRender();
+    this.commitHeroCreationDraft(draft);
   }
 
   private getNormalizedHeroCreation(): NormalizedHeroCreation {
-    const { name, portrait, raceId, classId, backgroundId } = this.state.heroCreation;
-    return normalizeHeroCreation(
-      { name, portrait, raceId, classId, backgroundId },
-      this.state.heroOptions,
-    );
+    return normalizeHeroCreation(this.getHeroCreationDraft(), this.state.heroOptions);
   }
 
   private reconcileHeroCreation(
     current: HeroCreationState,
     options: HeroOptionSnapshot,
   ): HeroCreationState {
-    const normalized = normalizeHeroCreation(
-      {
-        name: current.name,
-        portrait: current.portrait,
-        raceId: current.raceId,
-        classId: current.classId,
-        backgroundId: current.backgroundId,
-      },
-      options,
-    );
+    const normalized = normalizeHeroCreation(this.stripHeroCreationPreview(current), options);
     return {
-      ...current,
-      name: normalized.name,
-      portrait: normalized.portrait,
-      raceId: normalized.raceId,
-      classId: normalized.classId,
-      backgroundId: normalized.backgroundId,
+      ...normalized,
       preview: buildHeroPreview(normalized),
     };
+  }
+
+  private getHeroCreationDraft(): HeroCreationDraft {
+    return this.stripHeroCreationPreview(this.state.heroCreation);
+  }
+
+  private stripHeroCreationPreview(state: HeroCreationState): HeroCreationDraft {
+    const { preview, ...draft } = state;
+    return draft;
+  }
+
+  private commitHeroCreationDraft(draft: HeroCreationDraft): void {
+    const normalized = normalizeHeroCreation(draft, this.state.heroOptions);
+    const preview = buildHeroPreview(normalized);
+    this.state = {
+      ...this.state,
+      heroCreation: {
+        ...normalized,
+        preview,
+      },
+    };
+    this.requestRender();
   }
 
   private async loadSrdContent(): Promise<void> {
@@ -676,7 +880,22 @@ export class DDRoot extends HTMLElement {
       const total = raceBonus + classBonus;
       return { ability, raceBonus, classBonus, total };
     }).filter((entry) => entry.total !== 0);
-    const startingItems = selectedClass?.startingItems ?? [];
+    const classLoadouts = listClassLoadouts(selectedClass);
+    const selectedLoadout =
+      classLoadouts.find((entry) => entry.id === normalizedCreation.loadoutId) ??
+      classLoadouts[0] ??
+      null;
+    const backgroundLoadoutItems = normalizedCreation.includeBackgroundKit
+      ? selectedBackground?.startingItems ?? []
+      : [];
+    const startingItemEntries = [
+      ...(selectedLoadout?.items.map((item) => ({ item, source: 'class' as const })) ?? []),
+      ...(backgroundLoadoutItems.map((item) => ({ item, source: 'background' as const })) ?? []),
+    ];
+    const pointBuyRemaining =
+      normalizedCreation.abilityMethod === 'point-buy'
+        ? calculatePointBuyRemaining(normalizedCreation.baseAbilities)
+        : null;
     const compendiumData = {
       loading: compendiumLoading,
       error: compendiumError,
@@ -833,6 +1052,41 @@ export class DDRoot extends HTMLElement {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
+          .field-group {
+            display: grid;
+            gap: 0.75rem;
+          }
+
+          .ability-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+          }
+
+          .ability-control {
+            padding: 0.9rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            background: rgba(24, 18, 36, 0.75);
+            display: grid;
+            gap: 0.45rem;
+          }
+
+          .ability-control label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.7);
+          }
+
+          .ability-control input,
+          .ability-control select {
+            width: 100%;
+          }
+
           label {
             display: flex;
             flex-direction: column;
@@ -872,6 +1126,92 @@ export class DDRoot extends HTMLElement {
 
           button.primary:hover {
             transform: translateY(-2px);
+          }
+
+          button.secondary {
+            padding: 0.65rem 1rem;
+            border-radius: 10px;
+            border: 1px solid rgba(126, 196, 255, 0.45);
+            background: rgba(50, 90, 140, 0.35);
+            color: rgba(198, 223, 255, 0.95);
+            letter-spacing: 0.04em;
+            cursor: pointer;
+          }
+
+          button.secondary:hover {
+            background: rgba(50, 90, 140, 0.5);
+          }
+
+          .roll-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--dd-muted);
+          }
+
+          .roll-values {
+            font-family: 'IBM Plex Mono', monospace;
+            letter-spacing: 0.08em;
+          }
+
+          .loadout-items {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 0.5rem;
+          }
+
+          .loadout-items li {
+            background: rgba(18, 14, 28, 0.7);
+            border: 1px solid rgba(255, 210, 164, 0.15);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            display: grid;
+            gap: 0.25rem;
+          }
+
+          .loadout-items strong {
+            font-size: 0.9rem;
+          }
+
+          .loadout-items span {
+            font-size: 0.8rem;
+            color: var(--dd-muted);
+          }
+
+          .background-kit {
+            border: 1px solid rgba(255, 210, 164, 0.18);
+            border-radius: 16px;
+            padding: 1rem 1.25rem;
+            display: grid;
+            gap: 0.75rem;
+            background: rgba(24, 18, 36, 0.6);
+          }
+
+          .background-kit legend {
+            font-family: 'Cinzel', serif;
+            font-size: 0.9rem;
+            letter-spacing: 0.08em;
+            padding: 0 0.25rem;
+          }
+
+          .toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+          }
+
+          .toggle input {
+            accent-color: #f0b35a;
+          }
+
+          .field-hint strong {
+            color: #f0b35a;
+            font-weight: 600;
           }
 
           .mode-badge {
@@ -1080,6 +1420,13 @@ export class DDRoot extends HTMLElement {
             border-radius: 999px;
           }
 
+          .starting-kit .item-source {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(126, 196, 255, 0.8);
+          }
+
           .starting-kit .item-bonus {
             font-size: 0.7rem;
             letter-spacing: 0.06em;
@@ -1202,6 +1549,123 @@ export class DDRoot extends HTMLElement {
                             : html`<option value="" disabled>No backgrounds available</option>`}
                         </select>
                       </label>
+                      <div class="field-group">
+                        <label>
+                          Ability Generation
+                          <select name="ability-method" .value=${normalizedCreation.abilityMethod}>
+                            <option value="standard-array">Standard Array (15, 14, 13, 12, 10, 8)</option>
+                            <option value="rolled">4d6 Drop Lowest</option>
+                            <option value="point-buy">Point Buy (27 points)</option>
+                          </select>
+                        </label>
+                        ${normalizedCreation.abilityMethod === 'rolled'
+                          ? html`<div class="roll-controls">
+                              <button
+                                type="button"
+                                class="secondary"
+                                @click=${() => this.handleAbilityReroll()}
+                              >
+                                Roll Ability Scores
+                              </button>
+                              <span class="roll-values">Current roll: ${normalizedCreation.rolledSet.join(', ')}</span>
+                            </div>`
+                          : normalizedCreation.abilityMethod === 'standard-array'
+                              ? html`<span class="field-hint">
+                                  Assign each value from the array once across your abilities.
+                                </span>`
+                              : html`<span class="field-hint">
+                                  Allocate your scores between 8 and 15. Points remaining:
+                                  <strong>${pointBuyRemaining ?? 0}</strong>.
+                                </span>`}
+                      </div>
+                      <div class="ability-grid">
+                        ${ATTRIBUTE_ORDER.map((ability) => {
+                          const abilityValue = normalizedCreation.baseAbilities[ability];
+                          const controlId = `ability-${ability}`;
+                          return html`
+                            <div class="ability-control">
+                              <label for=${controlId}>${this.formatAbilityLabel(ability)}</label>
+                              ${normalizedCreation.abilityMethod === 'point-buy'
+                                ? html`<input
+                                    id=${controlId}
+                                    type="number"
+                                    min="8"
+                                    max="15"
+                                    step="1"
+                                    name=${`ability-${ability}`}
+                                    .value=${String(abilityValue)}
+                                  />`
+                                : html`<select
+                                    id=${controlId}
+                                    name=${`ability-${ability}`}
+                                    .value=${String(abilityValue)}
+                                  >
+                                    ${(
+                                      normalizedCreation.abilityMethod === 'standard-array'
+                                        ? STANDARD_ARRAY_VALUES
+                                        : normalizedCreation.rolledSet
+                                    ).map(
+                                      (value) => html`<option value=${value}>${value}</option>`,
+                                    )}
+                                  </select>`}
+                            </div>
+                          `;
+                        })}
+                      </div>
+                      <div class="field-group">
+                        <label>
+                          Class Loadout
+                          <select
+                            name="class-loadout"
+                            .value=${selectedLoadout?.id ?? ''}
+                            ?disabled=${classLoadouts.length === 0}
+                          >
+                            ${classLoadouts.length > 0
+                              ? classLoadouts.map(
+                                  (loadout) => html`<option value=${loadout.id}>${loadout.name}</option>`,
+                                )
+                              : html`<option value="" disabled>No loadouts available</option>`}
+                          </select>
+                        </label>
+                        ${selectedLoadout?.description
+                          ? html`<span class="field-hint">${selectedLoadout.description}</span>`
+                          : null}
+                        ${selectedLoadout && selectedLoadout.items.length > 0
+                          ? html`<ul class="loadout-items">
+                              ${selectedLoadout.items.map(
+                                (item) => html`<li>
+                                  <strong>${item.name}</strong>
+                                  <span>${item.description}</span>
+                                </li>`,
+                              )}
+                            </ul>`
+                          : classLoadouts.length === 0
+                              ? html`<span class="field-hint">
+                                  Choose a different class to access alternate starting kits.
+                                </span>`
+                              : html`<span class="field-hint">This loadout begins without gear.</span>`}
+                      </div>
+                      ${selectedBackground?.startingItems && selectedBackground.startingItems.length > 0
+                        ? html`<fieldset class="background-kit">
+                            <legend>Background Equipment</legend>
+                            <label class="toggle">
+                              <input
+                                type="checkbox"
+                                name="background-kit"
+                                ?checked=${normalizedCreation.includeBackgroundKit}
+                              />
+                              <span>Include ${selectedBackground.name} kit</span>
+                            </label>
+                            <ul class="loadout-items">
+                              ${selectedBackground.startingItems.map(
+                                (item) => html`<li>
+                                  <strong>${item.name}</strong>
+                                  <span>${item.description}</span>
+                                </li>`,
+                              )}
+                            </ul>
+                          </fieldset>`
+                        : null}
                       <button class="primary" type="submit">Begin the Chronicle</button>
                     </form>
                     <section class="preview-panel">
@@ -1287,27 +1751,37 @@ export class DDRoot extends HTMLElement {
                               </section>
                               <section>
                                 <h4>Starting Kit</h4>
-                                ${startingItems.length > 0
+                                ${startingItemEntries.length > 0
                                   ? html`<ul class="starting-kit">
-                                      ${startingItems.map((item) => html`
-                                        <li>
-                                          <div class="item-header">
-                                            <strong>${item.name}</strong>
-                                            <span class="item-type">
-                                              ${(item.type.charAt(0).toUpperCase() + item.type.slice(1)).replace(/-/g, ' ')}
-                                            </span>
-                                          </div>
-                                          <p>${item.description}</p>
-                                          ${item.bonus
-                                            ? html`<span class="item-bonus">
-                                                Bonus:
-                                                ${item.bonus.ability
-                                                  ? html`${this.formatAbilityLabel(item.bonus.ability)} +${item.bonus.value}`
-                                                  : html`+${item.bonus.value}`}
-                                              </span>`
-                                            : null}
-                                        </li>
-                                      `)}
+                                      ${startingItemEntries.map(({ item, source }) => {
+                                        const sourceLabel =
+                                          source === 'class'
+                                            ? selectedClass?.name ?? 'Class'
+                                            : selectedBackground?.name ?? 'Background';
+                                        return html`
+                                          <li>
+                                            <div class="item-header">
+                                              <strong>${item.name}</strong>
+                                              <span class="item-type">
+                                                ${(item.type.charAt(0).toUpperCase() + item.type.slice(1)).replace(
+                                                  /-/g,
+                                                  ' ',
+                                                )}
+                                              </span>
+                                              <span class="item-source">${sourceLabel}</span>
+                                            </div>
+                                            <p>${item.description}</p>
+                                            ${item.bonus
+                                              ? html`<span class="item-bonus">
+                                                  Bonus:
+                                                  ${item.bonus.ability
+                                                    ? html`${this.formatAbilityLabel(item.bonus.ability)} +${item.bonus.value}`
+                                                    : html`+${item.bonus.value}`}
+                                                </span>`
+                                              : null}
+                                          </li>
+                                        `;
+                                      })}
                                     </ul>`
                                   : html`<p>Begin empty-handed—improvise as you go.</p>`}
                               </section>

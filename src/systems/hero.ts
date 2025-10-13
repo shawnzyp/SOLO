@@ -233,6 +233,9 @@ export interface HeroCreationOptions {
   raceId: string;
   classId: string;
   backgroundId: string;
+  baseAbilities: Record<Ability, number>;
+  loadoutId?: string | null;
+  includeBackgroundKit?: boolean;
 }
 
 const CLASS_HIT_POINTS: Record<string, number> = {
@@ -264,6 +267,13 @@ export function createHero(options: HeroCreationOptions): Hero {
 
   const attributes: Record<Ability, number> = { ...BASE_ATTRIBUTES };
 
+  Object.entries(options.baseAbilities ?? {}).forEach(([ability, value]) => {
+    const key = ability as Ability;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      attributes[key] = Math.max(1, Math.floor(value));
+    }
+  });
+
   Object.entries(race.bonuses ?? {}).forEach(([ability, value]) => {
     attributes[ability as Ability] += value ?? 0;
   });
@@ -272,6 +282,24 @@ export function createHero(options: HeroCreationOptions): Hero {
   });
 
   const focusSkills = classSkillFocus.get(heroClass.id) ?? [];
+
+  const loadouts = heroClass.loadouts && heroClass.loadouts.length > 0
+    ? heroClass.loadouts
+    : heroClass.startingItems
+      ? [
+          {
+            id: `${heroClass.id}-default-loadout`,
+            name: `${heroClass.name} Standard`,
+            items: heroClass.startingItems,
+          },
+        ]
+      : [];
+
+  const selectedLoadout = loadouts.find((entry) => entry.id === options.loadoutId);
+  const classItems = selectedLoadout?.items ?? loadouts[0]?.items ?? heroClass.startingItems ?? [];
+  const includeBackgroundKit = options.includeBackgroundKit !== false;
+  const backgroundItems = includeBackgroundKit ? background.startingItems ?? [] : [];
+  const inventory = [...classItems, ...backgroundItems];
 
   const skills: Record<Skill, number> = SKILLS.reduce((acc, skill) => {
     const abilityScore = attributes[skill.ability];
@@ -285,7 +313,7 @@ export function createHero(options: HeroCreationOptions): Hero {
   const baseHP = CLASS_HIT_POINTS[heroClass.id] ?? 12;
   const maxHP = Math.max(baseHP + constitutionModifier * 2, baseHP);
   const dexModifier = Math.floor((attributes.dexterity - 10) / 2);
-  const armorBonus = heroClass.startingItems?.some((item) => item.type === 'armor') ? 2 : 0;
+  const armorBonus = inventory.some((item) => item.type === 'armor') ? 2 : 0;
   const armorClass = 10 + dexModifier + armorBonus;
 
   return {
@@ -301,7 +329,7 @@ export function createHero(options: HeroCreationOptions): Hero {
     maxHP,
     currentHP: maxHP,
     armorClass,
-    inventory: [...(heroClass.startingItems ?? [])],
+    inventory,
     gold: 25,
   };
 }
