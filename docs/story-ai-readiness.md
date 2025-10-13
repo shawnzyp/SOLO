@@ -55,7 +55,16 @@ Once the bridge and env vars are in place:
 3. Confirm that the toast message reports the correct origin/model, and that returning choices in the generated node route the story as expected. 【F:src/components/root.ts†L1320-L1351】【F:src/systems/world.ts†L228-L247】
 4. Reload the page to ensure persistence falls back to the last authored node instead of leaving the player stranded on ephemeral content. 【F:src/systems/world.ts†L551-L579】
 
-## 4. Optional polish before wider testing
+## 4. Curate the built-in oracle for offline play
+
+You can continue rolling out the Arcane Storyteller without provisioning an API. The fallback generator now assembles beats from blueprint tables that live entirely in the client, tailoring prose and skill challenges to the current hero and location.
+
+- Extend the `ORACLE_BLUEPRINTS` data with campaign-specific `titleTemplates`, `openings`, `skillChallenges`, and reward hooks. 【F:src/data/story-oracle.ts†L1-L214】
+- The selector favors blueprints matching the hero class, background, or node tags before falling back to the wandering muse defaults. 【F:src/systems/generative.ts†L214-L306】
+- Palettes, motifs, and local choice text are merged into the UI without any network request, so you can tune tone purely through data updates. 【F:src/data/story-oracle.ts†L17-L214】【F:src/systems/generative.ts†L308-L420】
+- Test the offline path by omitting `VITE_STORY_AI_ENDPOINT`; the storyteller will surface these oracle-driven beats, complete with return routes and skill checks. 【F:src/systems/generative.ts†L100-L119】【F:src/systems/generative.ts†L338-L420】
+
+## 5. Optional polish before wider testing
 
 - Surface the abort/cancel affordance in the UI if you expect slow models. The plumbing (`aiAbortController`) already exists; wiring a "Cancel Summon" button to `this.aiAbortController?.abort()` would finish the UX. 【F:src/components/root.ts†L210-L259】
 - Log remote failures centrally (Sentry, console batching) so narrative designers can spot prompt/response issues quickly.
