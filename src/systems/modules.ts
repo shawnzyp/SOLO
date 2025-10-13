@@ -22,7 +22,13 @@ interface HeroContentModulePayload {
   backgrounds?: HeroBackgroundOption[];
 }
 
-const MODULE_MANIFEST_URL = '/modules/index.json';
+const MODULE_MANIFEST_URL = resolvePublicAsset('modules/index.json');
+
+function resolvePublicAsset(path: string): string {
+  const base = import.meta.env.BASE_URL ?? '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  return `${normalizedBase}${path.replace(/^\//, '')}`;
+}
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
