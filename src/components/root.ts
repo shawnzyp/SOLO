@@ -56,7 +56,9 @@ import './dnd-compendium';
 import './combat-planner';
 import './dice-workbench';
 import './downtime-planner';
+import './arcane-storyteller';
 import { loadConfiguredModules } from '../systems/modules';
+import type { ArcaneStorytellerPanelState } from './arcane-storyteller';
 
 const INITIAL_HERO_OPTIONS: HeroOptionSnapshot = {
   races: listHeroRaces(),
@@ -102,6 +104,15 @@ interface HeroCreationState extends HeroCreationDraft {
   preview: Hero | null;
 }
 
+interface ArcaneImproviseEventDetail {
+  prompt: string;
+  requestId: string;
+}
+
+interface ArcaneCancelEventDetail {
+  requestId: string;
+}
+
 const DEFAULT_HERO_NAME = 'Lone Adventurer';
 const DEFAULT_HERO_PORTRAIT = 'https://avatars.dicebear.com/api/adventurer/chronicles.svg';
 const HERO_NAME_MAX_LENGTH = 40;
@@ -138,6 +149,14 @@ const COMPENDIUM_CATEGORY_ORDER: Array<{ id: SrdCompendiumCategory; label: strin
   { id: 'magic-items', label: 'Magic Items' },
   { id: 'spells', label: 'Spells' },
 ];
+
+const DEFAULT_STORYTELLER_STATE: ArcaneStorytellerPanelState = {
+  busy: false,
+  status: 'Summon the oracle to weave fresh scenes.',
+  error: null,
+  origin: null,
+  requestId: null,
+};
 
 function createEmptyCompendiumIndex(): Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]> {
   return COMPENDIUM_CATEGORY_ORDER.reduce(
@@ -264,6 +283,7 @@ interface RootState {
   compendium: Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]>;
   compendiumLoading: boolean;
   compendiumError: string | null;
+  storyteller: ArcaneStorytellerPanelState;
 }
 
 export class DDRoot extends HTMLElement {
@@ -296,6 +316,7 @@ export class DDRoot extends HTMLElement {
     compendium: createEmptyCompendiumIndex(),
     compendiumLoading: false,
     compendiumError: null,
+    storyteller: { ...DEFAULT_STORYTELLER_STATE },
   };
 
   private combatSession: CombatSession | null = null;
@@ -303,17 +324,22 @@ export class DDRoot extends HTMLElement {
   private srdAbortController: AbortController | null = null;
   private moduleAbortController: AbortController | null = null;
   private compendiumAbortController: AbortController | null = null;
+  private storytellerAbortController: AbortController | null = null;
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
     this.handleChoiceSelected = this.handleChoiceSelected.bind(this);
     this.handleCombatAction = this.handleCombatAction.bind(this);
+    this.handleArcaneImprovise = this.handleArcaneImprovise.bind(this);
+    this.handleArcaneCancel = this.handleArcaneCancel.bind(this);
   }
 
   connectedCallback(): void {
     this.addEventListener('choice-selected', this.handleChoiceSelected as EventListener);
     this.addEventListener('combat-action', this.handleCombatAction as EventListener);
+    this.addEventListener('arcane-improvise', this.handleArcaneImprovise as EventListener);
+    this.addEventListener('arcane-cancel', this.handleArcaneCancel as EventListener);
     this.heroOptionsUnsubscribe = subscribeHeroOptions((options) => {
       const reconciled = this.reconcileHeroCreation(this.state.heroCreation, options);
       this.state = {
@@ -357,6 +383,7 @@ export class DDRoot extends HTMLElement {
         journal: [...detail.journal].sort((a, b) => a.timestamp - b.timestamp),
         mode: detail.hero ? (this.state.mode === 'combat' ? 'combat' : 'story') : 'creation',
         mapNodes,
+        storyteller: detail.hero ? this.state.storyteller : { ...DEFAULT_STORYTELLER_STATE },
       };
       this.requestRender();
     });
@@ -459,6 +486,8 @@ export class DDRoot extends HTMLElement {
   disconnectedCallback(): void {
     this.removeEventListener('choice-selected', this.handleChoiceSelected as EventListener);
     this.removeEventListener('combat-action', this.handleCombatAction as EventListener);
+    this.removeEventListener('arcane-improvise', this.handleArcaneImprovise as EventListener);
+    this.removeEventListener('arcane-cancel', this.handleArcaneCancel as EventListener);
     if (this.heroOptionsUnsubscribe) {
       this.heroOptionsUnsubscribe();
       this.heroOptionsUnsubscribe = null;
@@ -474,6 +503,10 @@ export class DDRoot extends HTMLElement {
     if (this.compendiumAbortController) {
       this.compendiumAbortController.abort();
       this.compendiumAbortController = null;
+    }
+    if (this.storytellerAbortController) {
+      this.storytellerAbortController.abort();
+      this.storytellerAbortController = null;
     }
     this.audio.dispose();
   }
@@ -504,6 +537,79 @@ export class DDRoot extends HTMLElement {
       this.world.concludeCombat('flee', this.state.combat.encounter);
     }
     this.requestRender();
+  }
+
+  private async handleArcaneImprovise(event: CustomEvent<ArcaneImproviseEventDetail>): Promise<void> {
+    event.stopPropagation();
+    const { prompt, requestId } = event.detail;
+    if (!prompt) return;
+    const abortController = new AbortController();
+    if (this.storytellerAbortController) {
+      this.storytellerAbortController.abort();
+    }
+    this.storytellerAbortController = abortController;
+    this.state = {
+      ...this.state,
+      storyteller: {
+        busy: true,
+        status: 'Conjuring an unpredictable narrative thread...',
+        error: null,
+        origin: null,
+        requestId,
+      },
+    };
+    this.requestRender();
+
+    try {
+      const result = await this.world.improviseNarrative(prompt, { signal: abortController.signal });
+      const originLabel = result.origin === 'oracle-llm'
+        ? 'A remote oracle inscribed this scene.'
+        : 'The offline oracle spun this tale.';
+      this.state = {
+        ...this.state,
+        storyteller: {
+          busy: false,
+          status: originLabel,
+          error: null,
+          origin: result.origin,
+          requestId: null,
+        },
+      };
+      this.pushToast({
+        id: `oracle-${Date.now()}`,
+        title: 'Arcane Storyteller',
+        body: originLabel,
+        tone: 'info',
+      });
+    } catch (error) {
+      const aborted = abortController.signal.aborted;
+      this.state = {
+        ...this.state,
+        storyteller: {
+          busy: false,
+          status: aborted ? 'Summoning cancelled.' : 'Summoning failed.',
+          error: aborted
+            ? null
+            : error instanceof Error
+              ? error.message
+              : 'An unknown disturbance silenced the oracle.',
+          origin: null,
+          requestId: null,
+        },
+      };
+    } finally {
+      if (this.storytellerAbortController === abortController) {
+        this.storytellerAbortController = null;
+      }
+      this.requestRender();
+    }
+  }
+
+  private handleArcaneCancel(event: CustomEvent<ArcaneCancelEventDetail>): void {
+    event.stopPropagation();
+    if (this.storytellerAbortController) {
+      this.storytellerAbortController.abort();
+    }
   }
 
   private pushToast(toast: ToastMessage): void {
@@ -1811,6 +1917,9 @@ export class DDRoot extends HTMLElement {
           <main>
             <div class="mode-badge">${mode === 'combat' ? 'Combat Turn' : 'Story Phase'}</div>
             <dd-story-panel .data=${node}></dd-story-panel>
+            ${mode !== 'creation'
+              ? html`<dd-arcane-storyteller .data=${this.state.storyteller}></dd-arcane-storyteller>`
+              : null}
             ${mode === 'combat' && combat.encounter && combat.snapshot
               ? html`<dd-combat-hud
                   .data=${{ snapshot: combat.snapshot, enemyName: combat.encounter.enemy.name }}

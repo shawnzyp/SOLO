@@ -161,6 +161,7 @@ export interface WorldState {
   currentNodeId: string | null;
   ambientTrack?: string;
   discoveredNodes: Record<string, DiscoveredNode>;
+  oracleScenes: Record<string, OracleSceneRecord>;
 }
 
 export interface Condition {
@@ -240,6 +241,8 @@ export interface StoryChoice {
   hidden?: boolean;
 }
 
+export type StoryNodeOrigin = 'authored' | 'oracle-llm' | 'oracle-blueprint';
+
 export interface StoryNode {
   id: string;
   title: string;
@@ -249,6 +252,31 @@ export interface StoryNode {
   ambient?: string;
   tags?: string[];
   art?: string;
+  origin?: StoryNodeOrigin;
   onEnter?: Effect[];
   choices: StoryChoice[];
+}
+
+export interface OracleSceneRecord {
+  id: string;
+  title: string;
+  summary: string;
+  background: string;
+  body: string[];
+  ambient?: string;
+  art?: string;
+  tags?: string[];
+  origin: Exclude<StoryNodeOrigin, 'authored'>;
+  choices: StoryChoice[];
+}
+
+export interface ArcaneNarrativeContext {
+  prompt: string;
+  returnNodeId: string | null;
+}
+
+export interface ArcaneNarrativeResult {
+  node: StoryNode;
+  origin: Exclude<StoryNodeOrigin, 'authored'>;
+  prompt: string;
 }

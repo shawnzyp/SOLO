@@ -2589,7 +2589,28 @@ export const storyNodes: StoryNode[] = [
 ];
 
 const nodesById = new Map(storyNodes.map((node) => [node.id, node] as const));
+const dynamicNodeIds = new Set<string>();
 
 export function getNodeById(id: string): StoryNode | null {
   return nodesById.get(id) ?? null;
+}
+
+export function registerDynamicNode(node: StoryNode): void {
+  nodesById.set(node.id, node);
+  dynamicNodeIds.add(node.id);
+}
+
+export function unregisterDynamicNode(nodeId: string): void {
+  if (!dynamicNodeIds.has(nodeId)) return;
+  nodesById.delete(nodeId);
+  dynamicNodeIds.delete(nodeId);
+}
+
+export function resetDynamicNodes(): void {
+  dynamicNodeIds.forEach((id) => nodesById.delete(id));
+  dynamicNodeIds.clear();
+}
+
+export function listDynamicNodeIds(): string[] {
+  return Array.from(dynamicNodeIds);
 }
