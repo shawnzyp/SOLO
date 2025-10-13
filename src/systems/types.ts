@@ -69,12 +69,30 @@ export interface InventoryItem {
   };
 }
 
+export interface HeroClassLoadout {
+  id: string;
+  name: string;
+  summary: string;
+  items: InventoryItem[];
+  recommendedAbilities?: Ability[];
+  defaultSelected?: boolean;
+}
+
 export interface HeroClassOption {
   id: string;
   name: string;
   description: string;
   bonuses: Partial<Record<Ability, number>>;
   startingItems: InventoryItem[];
+  loadouts?: HeroClassLoadout[];
+}
+
+export interface HeroBackgroundKit {
+  id: string;
+  name: string;
+  description: string;
+  items: InventoryItem[];
+  defaultSelected?: boolean;
 }
 
 export interface HeroBackgroundOption {
@@ -82,7 +100,10 @@ export interface HeroBackgroundOption {
   name: string;
   description: string;
   feature: string;
+  equipment?: HeroBackgroundKit[];
 }
+
+export type AbilityGenerationMethod = 'standard-array' | 'rolled' | 'point-buy';
 
 export interface Hero {
   name: string;

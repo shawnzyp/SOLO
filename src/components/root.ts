@@ -24,9 +24,25 @@ import type {
   DiscoveredNode,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
-import { SKILLS, type CombatEncounter, type WorldState } from '../systems/types';
+import {
+  SKILLS,
+  type CombatEncounter,
+  type WorldState,
+  type Ability,
+  type HeroBackgroundOption,
+  type HeroClassOption,
+  type AbilityGenerationMethod,
+} from '../systems/types';
 import { CombatSession, type CombatSnapshot, type CombatAction } from '../systems/combat';
 import { AudioManager } from '../systems/audio';
+import {
+  ABILITY_ORDER,
+  createAbilityAssignments,
+  assignAbilityFromPool,
+  adjustPointBuy,
+  calculatePointBuyRemaining,
+  clampAssignmentsToPool,
+} from '../systems/abilities';
 
 import './story-panel';
 import './dialogue-list';
@@ -52,15 +68,35 @@ type RenderChoice = StoryChoice & { disabled?: boolean };
 
 type MapNode = DiscoveredNode & { isCurrent: boolean };
 
+interface HeroCreationAbilities {
+  method: AbilityGenerationMethod;
+  assignments: Record<Ability, number>;
+  pool: number[];
+  remainingPoints: number;
+  rerollsRemaining: number;
+}
+
 interface HeroCreationDraft {
   name: string;
   portrait: string;
   raceId: string;
   classId: string;
   backgroundId: string;
+  abilities: HeroCreationAbilities;
+  classLoadoutId: string | null;
+  backgroundEquipmentIds: string[];
 }
 
-interface NormalizedHeroCreation extends HeroCreationDraft {}
+interface NormalizedHeroCreation {
+  name: string;
+  portrait: string;
+  raceId: string;
+  classId: string;
+  backgroundId: string;
+  baseAttributes: Record<Ability, number>;
+  classLoadoutId: string | null;
+  backgroundEquipmentIds: string[];
+}
 
 interface HeroCreationState extends HeroCreationDraft {
   preview: Hero | null;
@@ -69,13 +105,29 @@ interface HeroCreationState extends HeroCreationDraft {
 const DEFAULT_HERO_NAME = 'Lone Adventurer';
 const DEFAULT_HERO_PORTRAIT = 'https://avatars.dicebear.com/api/adventurer/chronicles.svg';
 const HERO_NAME_MAX_LENGTH = 40;
-const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [
-  'strength',
-  'dexterity',
-  'constitution',
-  'intelligence',
-  'wisdom',
-  'charisma',
+const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [...ABILITY_ORDER];
+const MAX_ABILITY_REROLLS = 2;
+const DEFAULT_BASE_ABILITY_SCORE = 10;
+const ABILITY_METHOD_OPTIONS: Array<{
+  id: AbilityGenerationMethod;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: 'standard-array',
+    label: 'Standard Array',
+    description: 'Balanced heroic scores (15, 14, 13, 12, 10, 8).',
+  },
+  {
+    id: 'rolled',
+    label: '4d6 Drop Lowest',
+    description: 'Roll six ability scores and drop the lowest die (reroll up to two times).',
+  },
+  {
+    id: 'point-buy',
+    label: 'Point Buy',
+    description: 'Spend 27 points to customize each score between 8 and 15.',
+  },
 ];
 
 const COMPENDIUM_CATEGORY_ORDER: Array<{ id: SrdCompendiumCategory; label: string }> = [
@@ -107,12 +159,45 @@ function normalizeHeroCreation(
   const fallbackClass = options.classes[0]?.id ?? '';
   const fallbackBackground = options.backgrounds[0]?.id ?? '';
 
+  const raceId = options.races.some((entry) => entry.id === draft.raceId) ? draft.raceId : fallbackRace;
+  const classId = options.classes.some((entry) => entry.id === draft.classId) ? draft.classId : fallbackClass;
+  const backgroundId = options.backgrounds.some((entry) => entry.id === draft.backgroundId)
+    ? draft.backgroundId
+    : fallbackBackground;
+
+  const selectedClass = options.classes.find((entry) => entry.id === classId);
+  const classLoadouts = selectedClass?.loadouts ?? [];
+  const normalizedLoadoutId = classLoadouts.length
+    ? (classLoadouts.find((entry) => entry.id === draft.classLoadoutId)?.id ??
+        classLoadouts.find((entry) => entry.defaultSelected)?.id ??
+        classLoadouts[0]?.id ??
+        null)
+    : null;
+
+  const selectedBackground = options.backgrounds.find((entry) => entry.id === backgroundId);
+  const backgroundEquipment = selectedBackground?.equipment ?? [];
+  let backgroundEquipmentIds = (draft.backgroundEquipmentIds ?? []).filter((id) =>
+    backgroundEquipment.some((entry) => entry.id === id),
+  );
+  if (backgroundEquipmentIds.length === 0) {
+    backgroundEquipmentIds = backgroundEquipment.filter((entry) => entry.defaultSelected).map((entry) => entry.id);
+  }
+
+  const baseAttributes: Record<Ability, number> = { ...draft.abilities.assignments };
+  ATTRIBUTE_ORDER.forEach((ability) => {
+    const score = baseAttributes[ability] ?? DEFAULT_BASE_ABILITY_SCORE;
+    baseAttributes[ability] = Number.isFinite(score) ? score : DEFAULT_BASE_ABILITY_SCORE;
+  });
+
   return {
     name: trimmedName.length > 0 ? trimmedName : DEFAULT_HERO_NAME,
     portrait: trimmedPortrait.length > 0 ? trimmedPortrait : DEFAULT_HERO_PORTRAIT,
-    raceId: draft.raceId || fallbackRace,
-    classId: draft.classId || fallbackClass,
-    backgroundId: draft.backgroundId || fallbackBackground,
+    raceId,
+    classId,
+    backgroundId,
+    baseAttributes,
+    classLoadoutId: normalizedLoadoutId,
+    backgroundEquipmentIds,
   };
 }
 
@@ -125,12 +210,30 @@ function buildHeroPreview(normalized: NormalizedHeroCreation): Hero | null {
 }
 
 function createInitialHeroCreationState(options: HeroOptionSnapshot): HeroCreationState {
+  const defaultClass = options.classes[0];
+  const defaultBackground = options.backgrounds[0];
+  const abilityState = createAbilityAssignments('standard-array', ABILITY_ORDER);
   const base: HeroCreationDraft = {
     name: DEFAULT_HERO_NAME,
     portrait: '',
     raceId: options.races[0]?.id ?? '',
     classId: options.classes[0]?.id ?? '',
     backgroundId: options.backgrounds[0]?.id ?? '',
+    abilities: {
+      method: 'standard-array',
+      assignments: { ...abilityState.assignments },
+      pool: [...abilityState.pool],
+      remainingPoints: abilityState.remainingPoints,
+      rerollsRemaining: MAX_ABILITY_REROLLS,
+    },
+    classLoadoutId:
+      defaultClass?.loadouts?.find((entry) => entry.defaultSelected)?.id ??
+      defaultClass?.loadouts?.[0]?.id ??
+      null,
+    backgroundEquipmentIds:
+      defaultBackground?.equipment
+        ?.filter((entry) => entry.defaultSelected)
+        .map((entry) => entry.id) ?? [],
   };
   const normalized = normalizeHeroCreation(base, options);
   return {
@@ -445,34 +548,184 @@ export class DDRoot extends HTMLElement {
   private handleHeroCreationInput(event: Event): void {
     const form = event.currentTarget as HTMLFormElement | null;
     if (!form) return;
+    const target = event.target as HTMLElement | null;
+    if (target instanceof HTMLSelectElement && target.dataset.abilitySelect) {
+      event.stopPropagation();
+      const ability = target.dataset.abilitySelect as Ability;
+      const value = Number(target.value);
+      if (Number.isFinite(value)) {
+        this.handleAbilitySelect(ability, value);
+      }
+      return;
+    }
     this.updateHeroCreationDraft(form);
   }
 
-  private updateHeroCreationDraft(form: HTMLFormElement): void {
-    const formData = new FormData(form);
-    const draft: HeroCreationDraft = {
-      name: String(formData.get('name') ?? ''),
-      portrait: String(formData.get('portrait') ?? ''),
-      raceId: String(formData.get('race') ?? ''),
-      classId: String(formData.get('class') ?? ''),
-      backgroundId: String(formData.get('background') ?? ''),
+  private cloneHeroCreationDraft(): HeroCreationDraft {
+    const current = this.state.heroCreation;
+    return {
+      name: current.name,
+      portrait: current.portrait,
+      raceId: current.raceId,
+      classId: current.classId,
+      backgroundId: current.backgroundId,
+      abilities: {
+        method: current.abilities.method,
+        assignments: { ...current.abilities.assignments },
+        pool: [...current.abilities.pool],
+        remainingPoints: current.abilities.remainingPoints,
+        rerollsRemaining: current.abilities.rerollsRemaining,
+      },
+      classLoadoutId: current.classLoadoutId,
+      backgroundEquipmentIds: [...current.backgroundEquipmentIds],
     };
+  }
+
+  private commitHeroCreationDraft(draft: HeroCreationDraft): void {
     const normalized = normalizeHeroCreation(draft, this.state.heroOptions);
     const preview = buildHeroPreview(normalized);
     this.state = {
       ...this.state,
       heroCreation: {
         ...draft,
+        classLoadoutId: normalized.classLoadoutId,
+        backgroundEquipmentIds: normalized.backgroundEquipmentIds,
         preview,
       },
     };
     this.requestRender();
   }
 
+  private createAbilityStateForMethod(
+    method: AbilityGenerationMethod,
+    previous?: HeroCreationAbilities,
+  ): HeroCreationAbilities {
+    const baseline = createAbilityAssignments(method, ABILITY_ORDER);
+    return {
+      method,
+      assignments: { ...baseline.assignments },
+      pool: [...baseline.pool],
+      remainingPoints:
+        method === 'point-buy'
+          ? calculatePointBuyRemaining(baseline.assignments)
+          : baseline.remainingPoints,
+      rerollsRemaining: method === 'rolled' ? MAX_ABILITY_REROLLS : previous?.rerollsRemaining ?? MAX_ABILITY_REROLLS,
+    };
+  }
+
+  private sanitizeAbilityState(state: HeroCreationAbilities): HeroCreationAbilities {
+    const assignments =
+      state.pool.length > 0
+        ? clampAssignmentsToPool(state.assignments, state.pool)
+        : { ...state.assignments };
+    const remainingPoints =
+      state.method === 'point-buy' ? calculatePointBuyRemaining(assignments) : state.remainingPoints;
+    return {
+      ...state,
+      assignments,
+      pool: [...state.pool],
+      remainingPoints,
+    };
+  }
+
+  private mutateHeroCreationDraft(mutator: (draft: HeroCreationDraft) => void | HeroCreationDraft): void {
+    const draft = this.cloneHeroCreationDraft();
+    const result = mutator(draft);
+    const nextDraft = (result as HeroCreationDraft) ?? draft;
+    nextDraft.abilities = this.sanitizeAbilityState(nextDraft.abilities);
+    this.commitHeroCreationDraft(nextDraft);
+  }
+
+  private handleAbilitySelect(ability: Ability, value: number): void {
+    this.mutateHeroCreationDraft((draft) => {
+      if (draft.abilities.pool.length === 0) {
+        return;
+      }
+      const nextAssignments = assignAbilityFromPool(
+        draft.abilities.pool,
+        draft.abilities.assignments,
+        ability,
+        value,
+      );
+      if (nextAssignments === draft.abilities.assignments) {
+        return;
+      }
+      draft.abilities = {
+        ...draft.abilities,
+        assignments: nextAssignments,
+      };
+    });
+  }
+
+  private handlePointBuyAdjust(ability: Ability, delta: number): void {
+    this.mutateHeroCreationDraft((draft) => {
+      if (draft.abilities.method !== 'point-buy') {
+        return;
+      }
+      const result = adjustPointBuy(draft.abilities.assignments, ability, delta);
+      draft.abilities = {
+        ...draft.abilities,
+        assignments: result.assignments,
+        remainingPoints: result.remainingPoints,
+      };
+    });
+  }
+
+  private handleAbilityReroll(): void {
+    this.mutateHeroCreationDraft((draft) => {
+      if (draft.abilities.method !== 'rolled' || draft.abilities.rerollsRemaining <= 0) {
+        return;
+      }
+      const baseline = createAbilityAssignments('rolled', ABILITY_ORDER);
+      draft.abilities = {
+        method: 'rolled',
+        assignments: { ...baseline.assignments },
+        pool: [...baseline.pool],
+        remainingPoints: 0,
+        rerollsRemaining: Math.max(0, draft.abilities.rerollsRemaining - 1),
+      };
+    });
+  }
+
+  private updateHeroCreationDraft(form: HTMLFormElement): void {
+    const formData = new FormData(form);
+    const current = this.cloneHeroCreationDraft();
+    current.name = String(formData.get('name') ?? '');
+    current.portrait = String(formData.get('portrait') ?? '');
+    current.raceId = String(formData.get('race') ?? '');
+    current.classId = String(formData.get('class') ?? '');
+    current.backgroundId = String(formData.get('background') ?? '');
+    const loadoutRaw = String(formData.get('class-loadout') ?? '');
+    current.classLoadoutId = loadoutRaw.length > 0 ? loadoutRaw : null;
+    current.backgroundEquipmentIds = formData.getAll('background-equipment').map((value) => String(value));
+
+    const methodRaw = String(formData.get('ability-method') ?? current.abilities.method);
+    const method = (['standard-array', 'rolled', 'point-buy'] as AbilityGenerationMethod[]).includes(
+      methodRaw as AbilityGenerationMethod,
+    )
+      ? (methodRaw as AbilityGenerationMethod)
+      : current.abilities.method;
+    if (method !== current.abilities.method) {
+      current.abilities = this.createAbilityStateForMethod(method, current.abilities);
+    }
+    current.abilities = this.sanitizeAbilityState(current.abilities);
+
+    this.commitHeroCreationDraft(current);
+  }
+
   private getNormalizedHeroCreation(): NormalizedHeroCreation {
-    const { name, portrait, raceId, classId, backgroundId } = this.state.heroCreation;
+    const { heroCreation } = this.state;
     return normalizeHeroCreation(
-      { name, portrait, raceId, classId, backgroundId },
+      {
+        name: heroCreation.name,
+        portrait: heroCreation.portrait,
+        raceId: heroCreation.raceId,
+        classId: heroCreation.classId,
+        backgroundId: heroCreation.backgroundId,
+        abilities: heroCreation.abilities,
+        classLoadoutId: heroCreation.classLoadoutId,
+        backgroundEquipmentIds: heroCreation.backgroundEquipmentIds,
+      },
       this.state.heroOptions,
     );
   }
@@ -488,6 +741,9 @@ export class DDRoot extends HTMLElement {
         raceId: current.raceId,
         classId: current.classId,
         backgroundId: current.backgroundId,
+        abilities: current.abilities,
+        classLoadoutId: current.classLoadoutId,
+        backgroundEquipmentIds: current.backgroundEquipmentIds,
       },
       options,
     );
@@ -498,6 +754,8 @@ export class DDRoot extends HTMLElement {
       raceId: normalized.raceId,
       classId: normalized.classId,
       backgroundId: normalized.backgroundId,
+      classLoadoutId: normalized.classLoadoutId,
+      backgroundEquipmentIds: normalized.backgroundEquipmentIds,
       preview: buildHeroPreview(normalized),
     };
   }
@@ -674,13 +932,43 @@ export class DDRoot extends HTMLElement {
       heroBackgrounds.find((entry) => entry.id === normalizedCreation.backgroundId) ??
       heroBackgrounds[0] ?? null;
     const previewSkills = heroCreation.preview ? this.previewTopSkills(heroCreation.preview) : [];
+    const abilityAssignments = heroCreation.abilities.assignments;
+    const abilityMethod = heroCreation.abilities.method;
+    const abilityPool = heroCreation.abilities.pool;
+    const abilityPoolOptions = abilityPool.length
+      ? Array.from(
+          new Set(
+            abilityPool.concat(ATTRIBUTE_ORDER.map((ability) => abilityAssignments[ability] ?? 0)),
+          ),
+        ).sort((a, b) => b - a)
+      : [];
+    const abilityPoolSummary = abilityPool.reduce((acc, value) => {
+      const currentCount = acc.get(value) ?? 0;
+      acc.set(value, currentCount + 1);
+      return acc;
+    }, new Map<number, number>());
+    const abilityPoolDisplay = Array.from(abilityPoolSummary.entries()).sort((a, b) => b[0] - a[0]);
+    const abilityRemainingPoints = heroCreation.abilities.remainingPoints;
+    const abilityRerollsRemaining = heroCreation.abilities.rerollsRemaining;
     const abilityHighlights = ATTRIBUTE_ORDER.map((ability) => {
       const raceBonus = selectedRace?.bonuses?.[ability] ?? 0;
       const classBonus = selectedClass?.bonuses?.[ability] ?? 0;
       const total = raceBonus + classBonus;
       return { ability, raceBonus, classBonus, total };
     }).filter((entry) => entry.total !== 0);
-    const startingItems = selectedClass?.startingItems ?? [];
+    const classLoadouts = selectedClass?.loadouts ?? [];
+    const selectedLoadout =
+      classLoadouts.find((entry) => entry.id === normalizedCreation.classLoadoutId) ??
+      classLoadouts.find((entry) => entry.defaultSelected) ??
+      classLoadouts[0] ??
+      null;
+    const backgroundEquipment = selectedBackground?.equipment ?? [];
+    const selectedBackgroundEquipmentIds = new Set(normalizedCreation.backgroundEquipmentIds);
+    const activeBackgroundEquipment = backgroundEquipment.filter((entry) =>
+      selectedBackgroundEquipmentIds.has(entry.id),
+    );
+    const startingItems =
+      heroCreation.preview?.inventory ?? selectedLoadout?.items ?? selectedClass?.startingItems ?? [];
     const compendiumData = {
       loading: compendiumLoading,
       error: compendiumError,
@@ -1016,6 +1304,246 @@ export class DDRoot extends HTMLElement {
             margin-top: -0.1rem;
           }
 
+          .form-section {
+            display: grid;
+            gap: 1rem;
+            padding: 1.25rem;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(20, 15, 32, 0.65);
+          }
+
+          .form-section h2 {
+            margin: 0;
+            font-size: 1.05rem;
+            letter-spacing: 0.05em;
+            font-family: 'Cinzel', serif;
+          }
+
+          .ability-methods {
+            display: grid;
+            gap: 0.65rem;
+          }
+
+          .ability-method {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: start;
+            gap: 0.75rem;
+            padding: 0.7rem 0.9rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+            transition: border-color 150ms ease, background 150ms ease;
+          }
+
+          .ability-method input[type='radio'] {
+            margin-top: 0.35rem;
+          }
+
+          .ability-method.selected {
+            border-color: rgba(240, 179, 90, 0.6);
+            background: rgba(240, 179, 90, 0.08);
+          }
+
+          .ability-method strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 0.2rem;
+          }
+
+          .ability-method span.description {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--dd-muted);
+          }
+
+          .ability-pool {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.75);
+          }
+
+          .ability-pool span {
+            padding: 0.25rem 0.5rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+          }
+
+          .ability-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+          }
+
+          .ability-card {
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.75rem;
+            display: grid;
+            gap: 0.5rem;
+          }
+
+          .ability-card header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.7);
+          }
+
+          .ability-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .ability-card select {
+            width: 100%;
+            padding: 0.5rem 0.6rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(12, 9, 20, 0.65);
+            color: inherit;
+          }
+
+          .ability-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+          }
+
+          .ability-controls button {
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.06);
+            color: inherit;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            transition: background 150ms ease, transform 150ms ease;
+          }
+
+          .ability-controls button:hover {
+            background: rgba(240, 179, 90, 0.2);
+            transform: translateY(-1px);
+          }
+
+          .ability-remaining {
+            font-size: 0.8rem;
+            color: rgba(137, 227, 185, 0.85);
+          }
+
+          .ability-reroll {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.65rem;
+            border-radius: 999px;
+            border: 1px solid rgba(106, 192, 255, 0.45);
+            background: rgba(106, 192, 255, 0.12);
+            color: rgba(196, 232, 255, 0.95);
+            cursor: pointer;
+            transition: transform 150ms ease, background 150ms ease;
+          }
+
+          .ability-reroll[disabled] {
+            cursor: not-allowed;
+            opacity: 0.6;
+          }
+
+          .ability-reroll:not([disabled]):hover {
+            transform: translateY(-1px);
+            background: rgba(106, 192, 255, 0.2);
+          }
+
+          .loadout-options {
+            display: grid;
+            gap: 0.75rem;
+          }
+
+          .loadout-card {
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.9rem;
+            display: grid;
+            gap: 0.4rem;
+            cursor: pointer;
+          }
+
+          .loadout-card.selected {
+            border-color: rgba(240, 179, 90, 0.6);
+            background: rgba(240, 179, 90, 0.08);
+          }
+
+          .loadout-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          }
+
+          .loadout-header strong {
+            font-size: 0.95rem;
+          }
+
+          .loadout-card input[type='radio'] {
+            margin: 0;
+          }
+
+          .loadout-card p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.75);
+          }
+
+          .loadout-recommendations {
+            font-size: 0.75rem;
+            color: rgba(106, 192, 255, 0.9);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+          }
+
+          .equipment-options {
+            display: grid;
+            gap: 0.6rem;
+          }
+
+          .equipment-option {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.6rem;
+            align-items: start;
+            padding: 0.6rem 0.75rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+          }
+
+          .equipment-option strong {
+            display: block;
+            font-size: 0.9rem;
+          }
+
+          .equipment-option p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.75);
+          }
+
           button.primary {
             display: inline-flex;
             align-items: center;
@@ -1165,6 +1693,12 @@ export class DDRoot extends HTMLElement {
             border-radius: 12px;
             padding: 0.75rem;
             border: 1px solid rgba(255, 255, 255, 0.06);
+          }
+
+          .kit-meta {
+            margin: 0 0 0.4rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
           }
 
           .preview-info h4 {
@@ -1450,6 +1984,165 @@ export class DDRoot extends HTMLElement {
                         </div>
                         <span class="field-hint">Shape the history that informs your first steps.</span>
                       </label>
+                      <div class="form-section">
+                        <h2>Ability Scores</h2>
+                        <div class="ability-methods">
+                          ${ABILITY_METHOD_OPTIONS.map(
+                            (option) => html`
+                              <label
+                                class="ability-method ${abilityMethod === option.id ? 'selected' : ''}"
+                              >
+                                <input
+                                  type="radio"
+                                  name="ability-method"
+                                  value=${option.id}
+                                  .checked=${abilityMethod === option.id}
+                                />
+                                <div>
+                                  <strong>${option.label}</strong>
+                                  <span class="description">${option.description}</span>
+                                </div>
+                              </label>
+                            `,
+                          )}
+                        </div>
+                        ${abilityMethod === 'point-buy'
+                          ? html`<div class="ability-remaining">Points remaining: ${abilityRemainingPoints}</div>`
+                          : abilityPoolDisplay.length > 0
+                            ? html`<div class="ability-pool">
+                                ${abilityPoolDisplay.map(
+                                  ([value, count]) => html`<span>
+                                    ${value}${count > 1 ? html`×${count}` : ''}
+                                  </span>`,
+                                )}
+                              </div>`
+                            : null}
+                        ${abilityMethod === 'rolled'
+                          ? html`<button
+                              class="ability-reroll"
+                              type="button"
+                              ?disabled=${abilityRerollsRemaining <= 0}
+                              @click=${(event: Event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                this.handleAbilityReroll();
+                              }}
+                            >
+                              🔄 Reroll (${abilityRerollsRemaining} left)
+                            </button>`
+                          : null}
+                        <div class="ability-grid">
+                          ${ATTRIBUTE_ORDER.map((ability) => {
+                            const label = this.formatAbilityLabel(ability);
+                            const value = abilityAssignments[ability] ?? DEFAULT_BASE_ABILITY_SCORE;
+                            if (abilityMethod === 'point-buy') {
+                              return html`
+                                <div class="ability-card">
+                                  <header>
+                                    <span>${label}</span>
+                                    <span>${value}</span>
+                                  </header>
+                                  <div class="ability-controls">
+                                    <button
+                                      type="button"
+                                      @click=${(event: Event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        this.handlePointBuyAdjust(ability as Ability, -1);
+                                      }}
+                                    >
+                                      −
+                                    </button>
+                                    <div class="ability-value">${value}</div>
+                                    <button
+                                      type="button"
+                                      @click=${(event: Event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        this.handlePointBuyAdjust(ability as Ability, 1);
+                                      }}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              `;
+                            }
+                            return html`
+                              <div class="ability-card">
+                                <header>
+                                  <span>${label}</span>
+                                  <span>${value}</span>
+                                </header>
+                                <select
+                                  data-ability-select=${ability}
+                                  .value=${String(value)}
+                                >
+                                  ${abilityPoolOptions.map(
+                                    (optionValue) => html`<option value=${optionValue}>${optionValue}</option>`,
+                                  )}
+                                </select>
+                              </div>
+                            `;
+                          })}
+                        </div>
+                      </div>
+                      ${classLoadouts.length > 0
+                        ? html`<div class="form-section">
+                            <h2>Class Loadout</h2>
+                            <div class="loadout-options">
+                              ${classLoadouts.map((loadout) => {
+                                const isSelected = selectedLoadout?.id === loadout.id;
+                                return html`
+                                  <label class="loadout-card ${isSelected ? 'selected' : ''}">
+                                    <div class="loadout-header">
+                                      <input
+                                        type="radio"
+                                        name="class-loadout"
+                                        value=${loadout.id}
+                                        .checked=${isSelected}
+                                      />
+                                      <strong>${loadout.name}</strong>
+                                    </div>
+                                    <p>${loadout.summary}</p>
+                                    ${loadout.recommendedAbilities && loadout.recommendedAbilities.length > 0
+                                      ? html`<div class="loadout-recommendations">
+                                          Focus:
+                                          ${loadout.recommendedAbilities
+                                            .map((entry) => this.formatAbilityLabel(entry))
+                                            .join(', ')}
+                                        </div>`
+                                      : null}
+                                  </label>
+                                `;
+                              })}
+                            </div>
+                          </div>`
+                        : null}
+                      ${backgroundEquipment.length > 0
+                        ? html`<div class="form-section">
+                            <h2>Background Equipment</h2>
+                            <div class="equipment-options">
+                              ${backgroundEquipment.map((kit) => {
+                                const checked = selectedBackgroundEquipmentIds.has(kit.id);
+                                return html`
+                                  <label class="equipment-option">
+                                    <input
+                                      type="checkbox"
+                                      name="background-equipment"
+                                      value=${kit.id}
+                                      .checked=${checked}
+                                    />
+                                    <div>
+                                      <strong>${kit.name}</strong>
+                                      <p>${kit.description}</p>
+                                    </div>
+                                  </label>
+                                `;
+                              })}
+                            </div>
+                          </div>`
+                        : null}
                       <button class="primary" type="submit">
                         <span>Begin the Chronicle</span>
                         <span class="cta-icon" aria-hidden="true">➜</span>
@@ -1538,6 +2231,15 @@ export class DDRoot extends HTMLElement {
                               </section>
                               <section>
                                 <h4>Starting Kit</h4>
+                                ${selectedLoadout
+                                  ? html`<p class="kit-meta">Class Loadout: ${selectedLoadout.name}</p>`
+                                  : null}
+                                ${activeBackgroundEquipment.length > 0
+                                  ? html`<p class="kit-meta">
+                                      Background Gear:
+                                      ${activeBackgroundEquipment.map((kit) => kit.name).join(', ')}
+                                    </p>`
+                                  : null}
                                 ${startingItems.length > 0
                                   ? html`<ul class="starting-kit">
                                       ${startingItems.map((item) => html`
