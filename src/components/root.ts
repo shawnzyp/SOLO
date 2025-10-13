@@ -24,6 +24,7 @@ import type {
   DiscoveredNode,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
+import type { GeneratedStoryResult } from '../systems/generative';
 import { SKILLS, type CombatEncounter, type WorldState } from '../systems/types';
 import { CombatSession, type CombatSnapshot, type CombatAction } from '../systems/combat';
 import { AudioManager } from '../systems/audio';
@@ -61,6 +62,15 @@ interface NormalizedHeroCreation extends HeroCreationDraft {}
 
 interface HeroCreationState extends HeroCreationDraft {
   preview: Hero | null;
+}
+
+interface StoryAiState {
+  prompt: string;
+  loading: boolean;
+  error: string | null;
+  lastTitle: string | null;
+  lastOrigin: GeneratedStoryResult['origin'] | null;
+  lastModel: string | null;
 }
 
 const DEFAULT_HERO_NAME = 'Lone Adventurer';
@@ -157,6 +167,7 @@ interface RootState {
   compendium: Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]>;
   compendiumLoading: boolean;
   compendiumError: string | null;
+  ai: StoryAiState;
 }
 
 export class DDRoot extends HTMLElement {
@@ -189,6 +200,14 @@ export class DDRoot extends HTMLElement {
     compendium: createEmptyCompendiumIndex(),
     compendiumLoading: false,
     compendiumError: null,
+    ai: {
+      prompt: '',
+      loading: false,
+      error: null,
+      lastTitle: null,
+      lastOrigin: null,
+      lastModel: null,
+    },
   };
 
   private combatSession: CombatSession | null = null;
@@ -196,6 +215,7 @@ export class DDRoot extends HTMLElement {
   private srdAbortController: AbortController | null = null;
   private moduleAbortController: AbortController | null = null;
   private compendiumAbortController: AbortController | null = null;
+  private aiAbortController: AbortController | null = null;
 
   constructor() {
     super();
@@ -368,6 +388,10 @@ export class DDRoot extends HTMLElement {
       this.compendiumAbortController.abort();
       this.compendiumAbortController = null;
     }
+    if (this.aiAbortController) {
+      this.aiAbortController.abort();
+      this.aiAbortController = null;
+    }
     this.audio.dispose();
   }
 
@@ -397,6 +421,86 @@ export class DDRoot extends HTMLElement {
       this.world.concludeCombat('flee', this.state.combat.encounter);
     }
     this.requestRender();
+  }
+
+  private handleAiPromptInput(event: Event): void {
+    const target = event.currentTarget as HTMLTextAreaElement | null;
+    if (!target) return;
+    this.state = {
+      ...this.state,
+      ai: {
+        ...this.state.ai,
+        prompt: target.value,
+      },
+    };
+    this.requestRender();
+  }
+
+  private async handleAiGenerate(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.state.ai.loading) return;
+
+    const promptValue = this.state.ai.prompt;
+    if (this.aiAbortController) {
+      this.aiAbortController.abort();
+    }
+
+    const controller = new AbortController();
+    this.aiAbortController = controller;
+
+    this.state = {
+      ...this.state,
+      ai: {
+        ...this.state.ai,
+        loading: true,
+        error: null,
+      },
+    };
+    this.requestRender();
+
+    try {
+      const result = await this.world.improviseNarrative({
+        prompt: promptValue.trim().length > 0 ? promptValue.trim() : undefined,
+        signal: controller.signal,
+      });
+
+      this.state = {
+        ...this.state,
+        ai: {
+          ...this.state.ai,
+          loading: false,
+          error: null,
+          lastTitle: result.node.title,
+          lastOrigin: result.origin,
+          lastModel: result.model ?? null,
+        },
+      };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        this.state = {
+          ...this.state,
+          ai: {
+            ...this.state.ai,
+            loading: false,
+          },
+        };
+        return;
+      }
+
+      this.state = {
+        ...this.state,
+        ai: {
+          ...this.state.ai,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Failed to conjure a new story beat.',
+        },
+      };
+    } finally {
+      if (this.aiAbortController === controller) {
+        this.aiAbortController = null;
+      }
+      this.requestRender();
+    }
   }
 
   private pushToast(toast: ToastMessage): void {
@@ -657,6 +761,7 @@ export class DDRoot extends HTMLElement {
       compendium,
       compendiumLoading,
       compendiumError,
+      ai,
     } = this.state;
     const normalizedCreation = this.getNormalizedHeroCreation();
     const heroRaces = heroOptions.races;
@@ -686,6 +791,22 @@ export class DDRoot extends HTMLElement {
         entries: compendium[entry.id] ?? [],
       })),
     };
+    const aiStatus = ai.error
+      ? {
+          className: 'error',
+          text: ai.error,
+        }
+      : ai.lastTitle
+        ? {
+            className: 'success',
+            text: `Latest conjuration: ${ai.lastTitle}${
+              ai.lastModel ? ` · ${ai.lastModel}` : ''
+            } (${ai.lastOrigin === 'remote' ? 'AI model' : 'procedural oracle'})`,
+          }
+        : {
+            className: 'hint',
+            text: 'Offer a tone, twist, or complication—or leave blank to let the storyteller improvise. Configure VITE_STORY_AI_ENDPOINT to connect your own LLM, or rely on the built-in oracle.',
+          };
     render(
       html`
         <style>
@@ -879,6 +1000,107 @@ export class DDRoot extends HTMLElement {
             letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--dd-muted);
+          }
+
+          .ai-forge {
+            margin-top: 1.25rem;
+            padding: 1.1rem 1.25rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 210, 164, 0.22);
+            background: rgba(18, 12, 28, 0.78);
+            backdrop-filter: blur(6px);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+          }
+
+          .ai-forge header {
+            margin-bottom: 0.65rem;
+          }
+
+          .ai-forge h2 {
+            margin: 0;
+            font-family: 'Cinzel', serif;
+            font-size: 1.15rem;
+            letter-spacing: 0.08em;
+          }
+
+          .ai-forge p {
+            margin: 0.25rem 0 0;
+            font-size: 0.9rem;
+            color: var(--dd-muted);
+          }
+
+          .ai-forge form {
+            display: grid;
+            gap: 0.75rem;
+          }
+
+          .ai-forge textarea {
+            width: 100%;
+            min-height: 96px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 210, 164, 0.25);
+            background: rgba(10, 6, 18, 0.9);
+            color: inherit;
+            padding: 0.75rem 1rem;
+            font-family: inherit;
+            letter-spacing: 0.02em;
+            resize: vertical;
+          }
+
+          .ai-forge textarea::placeholder {
+            color: rgba(255, 255, 255, 0.45);
+          }
+
+          .ai-forge textarea:disabled {
+            opacity: 0.7;
+          }
+
+          .ai-forge .actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+          }
+
+          .ai-forge .actions button {
+            padding: 0.7rem 1.35rem;
+            border-radius: 999px;
+            border: 1px solid rgba(240, 179, 90, 0.6);
+            background: linear-gradient(90deg, rgba(240, 179, 90, 0.85), rgba(227, 116, 98, 0.9));
+            color: #1a1024;
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: transform 150ms ease, box-shadow 200ms ease;
+          }
+
+          .ai-forge .actions button:not([disabled]):hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+          }
+
+          .ai-forge .actions button[disabled] {
+            cursor: not-allowed;
+            opacity: 0.75;
+            box-shadow: none;
+          }
+
+          .ai-forge .status {
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+          }
+
+          .ai-forge .status.hint {
+            color: var(--dd-muted);
+          }
+
+          .ai-forge .status.success {
+            color: rgba(165, 232, 195, 0.95);
+          }
+
+          .ai-forge .status.error {
+            color: rgba(255, 156, 156, 0.95);
           }
 
           .preview-panel {
@@ -1097,6 +1319,29 @@ export class DDRoot extends HTMLElement {
           <main>
             <div class="mode-badge">${mode === 'combat' ? 'Combat Turn' : 'Story Phase'}</div>
             <dd-story-panel .data=${node}></dd-story-panel>
+            <section class="ai-forge">
+              <header>
+                <h2>Arcane Storyteller</h2>
+                <p>Call upon generative magic for unpredictable twists and roleplay fuel.</p>
+              </header>
+              <form @submit=${(event: Event) => this.handleAiGenerate(event)}>
+                <textarea
+                  name="storyteller-prompt"
+                  placeholder="Prompt the storyteller with a tone, foe, or complication…"
+                  .value=${ai.prompt}
+                  ?disabled=${ai.loading}
+                  @input=${(event: Event) => this.handleAiPromptInput(event)}
+                ></textarea>
+                <div class="actions">
+                  <button type="submit" ?disabled=${ai.loading}>
+                    ${ai.loading ? 'Summoning…' : 'Summon Story Beat'}
+                  </button>
+                  <span class=${`status ${aiStatus.className}`}>
+                    ${aiStatus.text}
+                  </span>
+                </div>
+              </form>
+            </section>
             ${mode === 'combat' && combat.encounter && combat.snapshot
               ? html`<dd-combat-hud
                   .data=${{ snapshot: combat.snapshot, enemyName: combat.encounter.enemy.name }}

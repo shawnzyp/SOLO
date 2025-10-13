@@ -16,6 +16,7 @@ import type {
   DiscoveredNode,
 } from './types';
 import { storyNodes, getNodeById } from '../data/story';
+import { generateStoryBeat, type GeneratedStoryResult } from './generative';
 
 export type WorldEventType =
   | 'state-change'
@@ -60,6 +61,8 @@ export class World extends EventTarget {
     ambientTrack: undefined,
     discoveredNodes: {},
   };
+  private generatedNodes = new Map<string, StoryNode>();
+  private lastStaticNodeId: string | null = null;
 
   constructor() {
     super();
@@ -70,7 +73,7 @@ export class World extends EventTarget {
   }
 
   get currentNode(): StoryNode | null {
-    return this.state.currentNodeId ? getNodeById(this.state.currentNodeId) : null;
+    return this.resolveNode(this.state.currentNodeId);
   }
 
   restore(): void {
@@ -83,6 +86,9 @@ export class World extends EventTarget {
         parsed.discoveredNodes = {};
       }
       this.state = parsed;
+      this.generatedNodes.clear();
+      const resolved = this.resolveNode(this.state.currentNodeId);
+      this.lastStaticNodeId = resolved && !this.generatedNodes.has(resolved.id) ? resolved.id : null;
       this.emit('state-change', this.snapshot);
     } catch (error) {
       console.warn('Failed to restore world state', error);
@@ -98,6 +104,8 @@ export class World extends EventTarget {
     this.state.ambientTrack = undefined;
     this.state.discoveredNodes = {};
     this.state.currentNodeId = null;
+    this.generatedNodes.clear();
+    this.lastStaticNodeId = null;
     this.addJournalEntry(
       `${hero.name}, a ${hero.race} ${hero.heroClass.name}, vows to walk the Ember Road alone.`,
     );
@@ -198,6 +206,43 @@ export class World extends EventTarget {
     };
   }
 
+  async improviseNarrative(
+    options: { prompt?: string; signal?: AbortSignal } = {},
+  ): Promise<GeneratedStoryResult> {
+    const hero = this.state.hero;
+    if (!hero) {
+      throw new Error('A hero must exist before invoking the storyteller.');
+    }
+
+    const context = {
+      hero,
+      currentNode: this.currentNode,
+      journal: [...this.state.journal],
+      quests: Object.values(this.state.quests),
+      factions: Object.values(this.state.factions),
+      achievements: Object.values(this.state.achievements),
+      prompt: options.prompt,
+    };
+
+    const result = await generateStoryBeat(context, options.signal);
+    this.generatedNodes.set(result.node.id, result.node);
+    this.setCurrentNode(result.node.id);
+
+    this.addJournalEntry(
+      `The arcane storyteller conjured “${result.node.title}” (${result.origin}).`,
+    );
+
+    this.emit('toast', {
+      id: `storyteller-${result.node.id}`,
+      title: 'Arcane Storyteller',
+      body: `New beat: ${result.node.title}`,
+      tone: result.origin === 'remote' ? 'info' : 'success',
+    });
+
+    this.persist();
+    return result;
+  }
+
   concludeCombat(result: 'victory' | 'defeat' | 'flee', encounter: CombatEncounter): void {
     const toastMessages: ToastMessage[] = [];
     let outcome: 'victory' | 'defeat' | 'flee' = 'victory';
@@ -255,14 +300,14 @@ export class World extends EventTarget {
   setCurrentNode(nodeId: string): void {
     this.state.currentNodeId = nodeId;
     const toastMessages: ToastMessage[] = [];
-    const initialNode = getNodeById(nodeId);
+    const initialNode = this.resolveNode(nodeId);
 
     if (initialNode?.onEnter) {
       this.applyEffects(initialNode.onEnter, toastMessages);
     }
 
     const finalNodeId = this.state.currentNodeId ?? nodeId;
-    const finalNode = finalNodeId ? getNodeById(finalNodeId) : initialNode;
+    const finalNode = this.resolveNode(finalNodeId);
     const discovery = finalNodeId ? this.trackDiscoveredNode(finalNodeId) : null;
     if (discovery?.isNew && finalNode) {
       toastMessages.push({
@@ -278,6 +323,10 @@ export class World extends EventTarget {
     }
 
     toastMessages.forEach((toast) => this.emit('toast', toast));
+
+    if (finalNode && !this.generatedNodes.has(finalNode.id)) {
+      this.lastStaticNodeId = finalNode.id;
+    }
 
     this.addJournalEntry(`Arrived at ${finalNode?.title ?? 'an unknown location'}.`);
     this.persist();
@@ -331,8 +380,13 @@ export class World extends EventTarget {
     }
   }
 
+  private resolveNode(nodeId: string | null): StoryNode | null {
+    if (!nodeId) return null;
+    return this.generatedNodes.get(nodeId) ?? getNodeById(nodeId);
+  }
+
   private trackDiscoveredNode(nodeId: string): { entry: DiscoveredNode; isNew: boolean } | null {
-    const node = getNodeById(nodeId);
+    const node = this.resolveNode(nodeId);
     if (!node) return null;
 
     const timestamp = Date.now();
@@ -489,6 +543,9 @@ export class World extends EventTarget {
           break;
         case 'setNode':
           this.state.currentNodeId = effect.nodeId;
+          if (!this.generatedNodes.has(effect.nodeId)) {
+            this.lastStaticNodeId = effect.nodeId;
+          }
           break;
         case 'setAmbient':
           this.state.ambientTrack = effect.track;
@@ -505,7 +562,11 @@ export class World extends EventTarget {
 
   private persist(): void {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    const serializable: WorldState = structuredClone(this.state);
+    if (serializable.currentNodeId && this.generatedNodes.has(serializable.currentNodeId)) {
+      serializable.currentNodeId = this.lastStaticNodeId;
+    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
   }
 }
 
@@ -571,6 +632,8 @@ export function resetWorld(world: World): void {
     discoveredNodes: {},
   };
   (world as unknown as { state: WorldState }).state = blank;
+  (world as unknown as { generatedNodes: Map<string, StoryNode> }).generatedNodes.clear();
+  (world as unknown as { lastStaticNodeId: string | null }).lastStaticNodeId = null;
   world.dispatchEvent(new CustomEvent('state-change', { detail: world.snapshot }));
 }
 
