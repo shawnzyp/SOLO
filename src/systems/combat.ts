@@ -1,6 +1,7 @@
 import { rollD20, rollFromNotation } from './dice';
 import type { CombatEncounter } from './types';
 import type { Hero } from './types';
+import { SafeEventTarget } from './event-target';
 
 export type CombatAction = 'attack' | 'defend' | 'use-item' | 'flee';
 
@@ -29,7 +30,8 @@ export interface CombatSnapshot extends CombatState {
   heroDamageRange: { min: number; max: number };
 }
 
-export class CombatSession extends EventTarget {
+export class CombatSession implements EventTarget {
+  private readonly events = new SafeEventTarget();
   private hero: Hero;
 
   private encounter: CombatEncounter;
@@ -39,7 +41,6 @@ export class CombatSession extends EventTarget {
   private potionUsed = false;
 
   constructor(hero: Hero, encounter: CombatEncounter) {
-    super();
     this.hero = hero;
     this.encounter = structuredClone(encounter);
     this.state = {
@@ -58,6 +59,26 @@ export class CombatSession extends EventTarget {
         },
       ],
     };
+  }
+
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.events.addEventListener(type, listener, options);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.events.removeEventListener(type, listener, options);
+  }
+
+  dispatchEvent(event: Event): boolean {
+    return this.events.dispatchEvent(event);
   }
 
   get snapshot(): CombatSnapshot {

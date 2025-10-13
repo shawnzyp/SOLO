@@ -19,6 +19,7 @@ import type {
 } from './types';
 import { storyNodes, getNodeById, registerDynamicNode, resetDynamicNodes } from '../data/story';
 import { ArcaneStorytellerEngine } from './storyteller';
+import { SafeEventTarget } from './event-target';
 
 export type WorldEventType =
   | 'state-change'
@@ -57,7 +58,8 @@ const ARCANE_STORYTELLER_CONFIG = {
   model: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_MODEL),
 };
 
-export class World extends EventTarget {
+export class World implements EventTarget {
+  private readonly events = new SafeEventTarget();
   private state: WorldState = {
     hero: null,
     factions: {},
@@ -75,8 +77,24 @@ export class World extends EventTarget {
     model: ARCANE_STORYTELLER_CONFIG.model ?? undefined,
   });
 
-  constructor() {
-    super();
+  addEventListener(
+    type: WorldEventType,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.events.addEventListener(type, listener, options);
+  }
+
+  removeEventListener(
+    type: WorldEventType,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.events.removeEventListener(type, listener, options);
+  }
+
+  dispatchEvent(event: Event): boolean {
+    return this.events.dispatchEvent(event);
   }
 
   get snapshot(): WorldState {
