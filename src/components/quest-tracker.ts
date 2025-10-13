@@ -1,8 +1,11 @@
 import { html, render } from 'lit-html';
-import type { Quest, QuestObjective } from '../systems/types';
+import type { Quest, QuestObjective, QuestStatus } from '../systems/types';
 
 export class DDQuestTracker extends HTMLElement {
   private quests: Quest[] = [];
+  private filterText = '';
+  private sortMode: 'status' | 'recent' | 'progress' = 'status';
+  private activeStatuses: Set<QuestStatus> = new Set(['active', 'completed', 'failed']);
 
   constructor() {
     super();
@@ -16,6 +19,7 @@ export class DDQuestTracker extends HTMLElement {
 
   private update(): void {
     if (!this.shadowRoot) return;
+    const filtered = this.getFilteredQuests();
     render(
       html`
         <style>
@@ -33,6 +37,88 @@ export class DDQuestTracker extends HTMLElement {
             font-family: 'Cinzel', serif;
             font-size: 1.1rem;
             letter-spacing: 0.04em;
+          }
+
+          .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+          }
+
+          .header span {
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+          }
+
+          .toolbar {
+            display: grid;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+          }
+
+          @media (min-width: 520px) {
+            .toolbar {
+              grid-template-columns: minmax(0, 1fr) auto;
+              align-items: center;
+            }
+          }
+
+          .status-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+          }
+
+          .status-toggle {
+            appearance: none;
+            background: rgba(32, 24, 44, 0.65);
+            color: inherit;
+            border: 1px solid rgba(255, 210, 164, 0.18);
+            border-radius: 999px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.2rem 0.65rem;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+          }
+
+          .status-toggle[selected] {
+            border-color: rgba(240, 179, 90, 0.5);
+            background: rgba(240, 179, 90, 0.16);
+            transform: translateY(-1px);
+          }
+
+          .filter-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+          }
+
+          .filter-controls input[type='search'] {
+            flex: 1 1 180px;
+            min-width: 0;
+            padding: 0.35rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            background: rgba(16, 12, 24, 0.75);
+            color: inherit;
+            font: inherit;
+          }
+
+          .filter-controls select {
+            appearance: none;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            background: rgba(16, 12, 24, 0.75);
+            color: inherit;
+            font: inherit;
+            padding: 0.35rem 0.6rem;
           }
 
           ul {
@@ -196,11 +282,53 @@ export class DDQuestTracker extends HTMLElement {
             letter-spacing: 0.08em;
             color: rgba(255, 255, 255, 0.55);
           }
+
+          .empty {
+            font-size: 0.85rem;
+            color: var(--dd-muted);
+            text-align: center;
+            padding: 1.25rem 0.5rem;
+          }
         </style>
-        <h3>Quest Journal</h3>
+        <div class="header">
+          <h3>Quest Journal</h3>
+          <span>${filtered.length} of ${this.quests.length} quests shown</span>
+        </div>
+        <div class="toolbar">
+          <div class="status-filters" role="group" aria-label="Filter quests by status">
+            ${['active', 'completed', 'failed'].map((status) => html`
+              <button
+                type="button"
+                class="status-toggle"
+                ?selected=${this.activeStatuses.has(status as QuestStatus)}
+                @click=${() => this.toggleStatus(status as QuestStatus)}
+              >
+                ${status}
+              </button>
+            `)}
+          </div>
+          <div class="filter-controls">
+            <input
+              type="search"
+              placeholder="Search quests"
+              .value=${this.filterText}
+              @input=${(event: Event) => this.handleFilterInput(event)}
+              aria-label="Search quests"
+            />
+            <select
+              .value=${this.sortMode}
+              @change=${(event: Event) => this.handleSortChange(event)}
+              aria-label="Sort quests"
+            >
+              <option value="status">Sort by status</option>
+              <option value="recent">Recently updated</option>
+              <option value="progress">Highest progress</option>
+            </select>
+          </div>
+        </div>
         <ul>
-          ${this.quests.length > 0
-            ? this.quests.map((quest) => {
+          ${filtered.length > 0
+            ? filtered.map((quest) => {
                 const objectives = this.normalizeObjectives(quest);
                 const progress = this.calculateProgress(quest, objectives);
                 const progressLabel = `${Math.round(progress * 100)}%`;
@@ -250,11 +378,99 @@ export class DDQuestTracker extends HTMLElement {
                   </li>
                 `;
               })
-            : html`<li><p>No active quests—forge your path!</p></li>`}
+            : html`<li class="empty">No quests match your current filters.</li>`}
         </ul>
       `,
       this.shadowRoot,
     );
+  }
+
+  private getFilteredQuests(): Quest[] {
+    const query = this.filterText.trim().toLowerCase();
+    const matchesStatus = (quest: Quest) => this.activeStatuses.has(quest.status);
+    const matchesQuery = (quest: Quest) => {
+      if (!query) return true;
+      const haystack = [
+        quest.title,
+        quest.summary,
+        quest.faction ?? '',
+        quest.location ?? '',
+        quest.reward ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    };
+
+    const filtered = this.quests.filter((quest) => matchesStatus(quest) && matchesQuery(quest));
+    return this.sortQuests(filtered);
+  }
+
+  private sortQuests(quests: Quest[]): Quest[] {
+    const statusRank: Record<QuestStatus, number> = {
+      active: 0,
+      completed: 1,
+      failed: 2,
+    };
+
+    const byStatus = (a: Quest, b: Quest) => {
+      if (statusRank[a.status] !== statusRank[b.status]) {
+        return statusRank[a.status] - statusRank[b.status];
+      }
+      return a.title.localeCompare(b.title);
+    };
+
+    const byRecent = (a: Quest, b: Quest) => {
+      const aTime = a.updatedAt ?? 0;
+      const bTime = b.updatedAt ?? 0;
+      if (aTime !== bTime) {
+        return bTime - aTime;
+      }
+      return byStatus(a, b);
+    };
+
+    const byProgress = (a: Quest, b: Quest) => {
+      const aObjectives = this.normalizeObjectives(a);
+      const bObjectives = this.normalizeObjectives(b);
+      const aProgress = this.calculateProgress(a, aObjectives);
+      const bProgress = this.calculateProgress(b, bObjectives);
+      if (aProgress !== bProgress) {
+        return bProgress - aProgress;
+      }
+      return byRecent(a, b);
+    };
+
+    const sorter =
+      this.sortMode === 'status' ? byStatus : this.sortMode === 'recent' ? byRecent : byProgress;
+    return [...quests].sort(sorter);
+  }
+
+  private handleFilterInput(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement | null;
+    this.filterText = input?.value ?? '';
+    this.update();
+  }
+
+  private handleSortChange(event: Event): void {
+    const select = event.currentTarget as HTMLSelectElement | null;
+    const value = (select?.value ?? 'status') as typeof this.sortMode;
+    if (this.sortMode === value) return;
+    this.sortMode = value;
+    this.update();
+  }
+
+  private toggleStatus(status: QuestStatus): void {
+    const next = new Set(this.activeStatuses);
+    if (next.has(status)) {
+      next.delete(status);
+    } else {
+      next.add(status);
+    }
+    if (next.size === 0) {
+      next.add(status);
+    }
+    this.activeStatuses = next;
+    this.update();
   }
 
   private normalizeObjectives(quest: Quest): QuestObjective[] {

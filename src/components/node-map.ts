@@ -7,6 +7,8 @@ interface NodeMapEntry extends DiscoveredNode {
 
 export class DDNodeMap extends HTMLElement {
   private nodes: NodeMapEntry[] = [];
+  private sortMode: 'recent' | 'first' | 'visits' | 'alphabetical' = 'recent';
+  private tagFilter = '';
 
   constructor() {
     super();
@@ -20,7 +22,8 @@ export class DDNodeMap extends HTMLElement {
 
   private update(): void {
     if (!this.shadowRoot) return;
-    const nodes = this.nodes;
+    const nodes = this.getProcessedNodes();
+    const tagSummary = this.getTagSummary();
     render(
       html`
         <style>
@@ -40,6 +43,60 @@ export class DDNodeMap extends HTMLElement {
             font-family: 'Cinzel', serif;
             font-size: 1.1rem;
             letter-spacing: 0.04em;
+          }
+
+          header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+          }
+
+          header .meta {
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.65);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.2rem;
+          }
+
+          .controls {
+            display: grid;
+            gap: 0.5rem;
+            margin-bottom: 0.9rem;
+          }
+
+          @media (min-width: 540px) {
+            .controls {
+              grid-template-columns: minmax(0, 1fr) auto;
+              align-items: center;
+            }
+          }
+
+          .controls input[type='search'] {
+            width: 100%;
+            padding: 0.35rem 0.55rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            background: rgba(16, 12, 24, 0.75);
+            color: inherit;
+            font: inherit;
+          }
+
+          .controls select {
+            appearance: none;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            background: rgba(16, 12, 24, 0.75);
+            color: inherit;
+            font: inherit;
+            padding: 0.35rem 0.6rem;
+            min-width: 160px;
           }
 
           .constellation {
@@ -122,6 +179,17 @@ export class DDNodeMap extends HTMLElement {
             text-transform: uppercase;
           }
 
+          .tag-set {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+          }
+
+          .meta small {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.55);
+          }
+
           footer {
             display: flex;
             justify-content: space-between;
@@ -144,7 +212,39 @@ export class DDNodeMap extends HTMLElement {
             color: var(--dd-muted);
           }
         </style>
-        <h3>World Map</h3>
+        <header>
+          <div>
+            <h3>World Map</h3>
+            ${tagSummary.topTags.length > 0
+              ? html`<div class="tag-set">
+                  ${tagSummary.topTags.map((tag) => html`<span class="tag">${tag}</span>`)}
+                </div>`
+              : null}
+          </div>
+          <div class="meta">
+            <span>${nodes.length} locations shown</span>
+            <small>${tagSummary.uniqueTags} unique tags discovered</small>
+          </div>
+        </header>
+        <div class="controls">
+          <input
+            type="search"
+            placeholder="Filter by name or tag"
+            .value=${this.tagFilter}
+            @input=${(event: Event) => this.handleFilterInput(event)}
+            aria-label="Filter locations"
+          />
+          <select
+            .value=${this.sortMode}
+            @change=${(event: Event) => this.handleSortChange(event)}
+            aria-label="Sort locations"
+          >
+            <option value="recent">Recently visited</option>
+            <option value="first">First discovered</option>
+            <option value="visits">Most visited</option>
+            <option value="alphabetical">Alphabetical</option>
+          </select>
+        </div>
         ${nodes.length > 0
           ? html`
               <div class="constellation">
@@ -173,6 +273,72 @@ export class DDNodeMap extends HTMLElement {
       `,
       this.shadowRoot,
     );
+  }
+
+  private getProcessedNodes(): NodeMapEntry[] {
+    const query = this.tagFilter.trim().toLowerCase();
+    const filtered = this.nodes.filter((node) => {
+      if (!query) return true;
+      const haystack = [
+        node.title,
+        node.summary,
+        ...(node.tags ?? []),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+
+    const byRecent = (a: NodeMapEntry, b: NodeMapEntry) => b.lastVisitedAt - a.lastVisitedAt;
+    const byFirst = (a: NodeMapEntry, b: NodeMapEntry) => a.firstVisitedAt - b.firstVisitedAt;
+    const byVisits = (a: NodeMapEntry, b: NodeMapEntry) => b.visits - a.visits;
+    const byAlphabetical = (a: NodeMapEntry, b: NodeMapEntry) => a.title.localeCompare(b.title);
+
+    const sorter =
+      this.sortMode === 'recent'
+        ? byRecent
+        : this.sortMode === 'first'
+        ? byFirst
+        : this.sortMode === 'visits'
+        ? byVisits
+        : byAlphabetical;
+
+    return [...filtered].sort((a, b) => {
+      const result = sorter(a, b);
+      if (result !== 0) return result;
+      return a.title.localeCompare(b.title);
+    });
+  }
+
+  private handleFilterInput(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement | null;
+    this.tagFilter = input?.value ?? '';
+    this.update();
+  }
+
+  private handleSortChange(event: Event): void {
+    const select = event.currentTarget as HTMLSelectElement | null;
+    const value = (select?.value ?? 'recent') as typeof this.sortMode;
+    if (this.sortMode === value) return;
+    this.sortMode = value;
+    this.update();
+  }
+
+  private getTagSummary(): { uniqueTags: number; topTags: string[] } {
+    const tagCounts = new Map<string, number>();
+    for (const node of this.nodes) {
+      for (const tag of node.tags ?? []) {
+        const key = tag.trim();
+        if (!key) continue;
+        tagCounts.set(key, (tagCounts.get(key) ?? 0) + 1);
+      }
+    }
+    const uniqueTags = tagCounts.size;
+    const topTags = [...tagCounts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 3)
+      .map(([tag]) => tag);
+    return { uniqueTags, topTags };
   }
 }
 
