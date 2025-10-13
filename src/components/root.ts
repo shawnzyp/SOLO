@@ -1111,6 +1111,8 @@ export class DDRoot extends HTMLElement {
             padding: 2rem 3rem;
             color: var(--dd-text);
             position: relative;
+            width: min(1200px, 100%);
+            margin: 0 auto;
           }
 
           .layout {
@@ -1140,6 +1142,7 @@ export class DDRoot extends HTMLElement {
             justify-content: center;
             z-index: 999;
             padding: 2rem;
+            overflow-y: auto;
           }
 
           .creation-panel {
@@ -1911,6 +1914,58 @@ export class DDRoot extends HTMLElement {
             font-size: 0.9rem;
             color: var(--dd-muted);
             text-align: center;
+          }
+
+          @media (max-width: 1200px) {
+            :host {
+              padding: 2rem 2.5rem;
+            }
+          }
+
+          @media (max-width: 960px) {
+            :host {
+              padding: 1.75rem 1.5rem 3rem;
+            }
+
+            .layout {
+              grid-template-columns: 1fr;
+              gap: 1.5rem;
+            }
+
+            main,
+            aside {
+              order: initial;
+            }
+          }
+
+          @media (max-width: 768px) {
+            :host {
+              padding: 1.5rem 1rem 2.5rem;
+            }
+
+            .creation-overlay {
+              align-items: flex-start;
+              padding: 1.5rem 1rem;
+            }
+
+            .creation-panel {
+              padding: 1.75rem;
+            }
+
+            .creation-content {
+              grid-template-columns: minmax(0, 1fr);
+              gap: 1.5rem;
+            }
+          }
+
+          @media (max-width: 520px) {
+            :host {
+              padding: 1.25rem 0.75rem 2rem;
+            }
+
+            .creation-panel {
+              padding: 1.5rem;
+            }
           }
         </style>
         <div class="layout">
