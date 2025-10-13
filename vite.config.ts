@@ -5,4 +5,8 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 4173,
   },
+  build: {
+    outDir: 'docs',
+    emptyOutDir: true,
+  },
 }));
