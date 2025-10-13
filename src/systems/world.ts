@@ -2,6 +2,7 @@ import { rollD20, type RollResult } from './dice';
 import type {
   Ability,
   Achievement,
+  ArcaneNarrativeResult,
   CombatEncounter,
   Condition,
   Effect,
@@ -14,8 +15,10 @@ import type {
   StoryNode,
   WorldState,
   DiscoveredNode,
+  OracleSceneRecord,
 } from './types';
-import { storyNodes, getNodeById } from '../data/story';
+import { storyNodes, getNodeById, registerDynamicNode, resetDynamicNodes } from '../data/story';
+import { ArcaneStorytellerEngine } from './storyteller';
 
 export type WorldEventType =
   | 'state-change'
@@ -48,6 +51,11 @@ export interface ChoiceResolution {
 }
 
 const STORAGE_KEY = 'dd-chronicles-world';
+const ARCANE_STORYTELLER_CONFIG = {
+  endpoint: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_URL),
+  apiKey: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_KEY),
+  model: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_MODEL),
+};
 
 export class World extends EventTarget {
   private state: WorldState = {
@@ -59,7 +67,13 @@ export class World extends EventTarget {
     currentNodeId: null,
     ambientTrack: undefined,
     discoveredNodes: {},
+    oracleScenes: {},
   };
+  private storyteller = new ArcaneStorytellerEngine({
+    endpoint: ARCANE_STORYTELLER_CONFIG.endpoint ?? undefined,
+    apiKey: ARCANE_STORYTELLER_CONFIG.apiKey ?? undefined,
+    model: ARCANE_STORYTELLER_CONFIG.model ?? undefined,
+  });
 
   constructor() {
     super();
@@ -82,7 +96,11 @@ export class World extends EventTarget {
       if (!parsed.discoveredNodes) {
         parsed.discoveredNodes = {};
       }
+      if (!parsed.oracleScenes) {
+        parsed.oracleScenes = {};
+      }
       this.state = parsed;
+      this.restoreOracleScenes(parsed.oracleScenes);
       this.emit('state-change', this.snapshot);
     } catch (error) {
       console.warn('Failed to restore world state', error);
@@ -97,6 +115,8 @@ export class World extends EventTarget {
     this.state.factions = buildInitialFactions();
     this.state.ambientTrack = undefined;
     this.state.discoveredNodes = {};
+    this.state.oracleScenes = {};
+    resetDynamicNodes();
     this.state.currentNodeId = null;
     this.addJournalEntry(
       `${hero.name}, a ${hero.race} ${hero.heroClass.name}, vows to walk the Ember Road alone.`,
@@ -118,6 +138,26 @@ export class World extends EventTarget {
     };
     this.state.journal = [...this.state.journal, entry];
     this.emit('journal-entry', entry);
+  }
+
+  async improviseNarrative(
+    prompt: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ArcaneNarrativeResult> {
+    const hero = this.state.hero;
+    if (!hero) {
+      throw new Error('A hero must be created before summoning the Arcane Storyteller.');
+    }
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      throw new Error('Describe the scene you wish to summon.');
+    }
+
+    const result = await this.storyteller.improvise(trimmedPrompt, hero, this.state.currentNodeId, options?.signal);
+    const oracleNode = this.registerOracleNode(result.node, this.state.currentNodeId);
+    this.addJournalEntry(`Arcane Storyteller conjures: ${oracleNode.title}.`);
+    this.setCurrentNode(oracleNode.id);
+    return { ...result, node: oracleNode };
   }
 
   applyChoice(choice: StoryChoice): ChoiceResolution {
@@ -357,6 +397,116 @@ export class World extends EventTarget {
     return { entry, isNew: true };
   }
 
+  private registerOracleNode(node: StoryNode, returnNodeId: string | null): StoryNode {
+    const normalized = this.normalizeOracleNode(node, returnNodeId);
+    registerDynamicNode(normalized);
+    this.state.oracleScenes[normalized.id] = this.toOracleRecord(normalized);
+    return normalized;
+  }
+
+  private normalizeOracleNode(node: StoryNode, returnNodeId: string | null): StoryNode {
+    const origin = node.origin === 'oracle-llm' ? 'oracle-llm' : 'oracle-blueprint';
+    const normalizedChoices = this.ensureOracleReturn(
+      node.choices.map((choice) => this.cloneStoryChoice(choice)),
+      returnNodeId,
+    );
+    return {
+      id: node.id,
+      title: node.title,
+      summary: node.summary,
+      body: node.body.map((paragraph) => paragraph.trim()).filter((paragraph) => paragraph.length > 0),
+      background: node.background,
+      ambient: node.ambient,
+      art: node.art,
+      tags: node.tags ? [...node.tags] : undefined,
+      origin,
+      choices: normalizedChoices,
+    };
+  }
+
+  private ensureOracleReturn(choices: StoryChoice[], returnNodeId: string | null): StoryChoice[] {
+    const fallbackNode = returnNodeId ?? 'tavern-common-room';
+    if (choices.some((choice) => choice.toNode === fallbackNode)) {
+      return choices;
+    }
+    return [
+      ...choices,
+      {
+        id: `oracle-return-${Date.now()}`,
+        text: returnNodeId ? 'Step back from the vision' : 'Return to Verdyn',
+        description: returnNodeId
+          ? 'Return to where you began summoning this tale.'
+          : 'Retrace your steps to Verdyn to anchor the vision.',
+        toNode: fallbackNode,
+      },
+    ];
+  }
+
+  private toOracleRecord(node: StoryNode): OracleSceneRecord {
+    return {
+      id: node.id,
+      title: node.title,
+      summary: node.summary,
+      background: node.background,
+      body: [...node.body],
+      ambient: node.ambient,
+      art: node.art,
+      tags: node.tags ? [...node.tags] : undefined,
+      origin: node.origin === 'oracle-llm' ? 'oracle-llm' : 'oracle-blueprint',
+      choices: node.choices.map((choice) => this.cloneStoryChoice(choice)),
+    };
+  }
+
+  private buildNodeFromRecord(record: OracleSceneRecord): StoryNode {
+    return {
+      id: record.id,
+      title: record.title,
+      summary: record.summary,
+      background: record.background,
+      body: [...record.body],
+      ambient: record.ambient,
+      art: record.art,
+      tags: record.tags ? [...record.tags] : undefined,
+      origin: record.origin,
+      choices: record.choices.map((choice) => this.cloneStoryChoice(choice)),
+    };
+  }
+
+  private restoreOracleScenes(records: Record<string, OracleSceneRecord>): void {
+    resetDynamicNodes();
+    Object.values(records).forEach((record) => {
+      const node = this.buildNodeFromRecord(record);
+      registerDynamicNode(node);
+    });
+  }
+
+  private cloneStoryChoice(choice: StoryChoice): StoryChoice {
+    return {
+      ...choice,
+      requirements: choice.requirements ? choice.requirements.map((condition) => ({ ...condition })) : undefined,
+      effects: choice.effects ? choice.effects.map((effect) => ({ ...effect })) : undefined,
+      skillCheck: choice.skillCheck
+        ? {
+            ...choice.skillCheck,
+            success: { ...choice.skillCheck.success },
+            failure: { ...choice.skillCheck.failure },
+          }
+        : undefined,
+      combat: choice.combat
+        ? {
+            ...choice.combat,
+            enemy: { ...choice.combat.enemy },
+            victoryEffects: choice.combat.victoryEffects
+              ? choice.combat.victoryEffects.map((effect) => ({ ...effect }))
+              : undefined,
+            defeatEffects: choice.combat.defeatEffects
+              ? choice.combat.defeatEffects.map((effect) => ({ ...effect }))
+              : undefined,
+          }
+        : undefined,
+    };
+  }
+
   private applyEffects(effects: Effect[], toastMessages: ToastMessage[]): void {
     effects.forEach((effect) => {
       switch (effect.type) {
@@ -525,6 +675,12 @@ function compare(left: number, operator: NonNullable<Condition['operator']>, rig
   }
 }
 
+function normalizeEnv(value?: string): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function buildInitialFactions(): Record<string, { id: string; name: string; description: string; value: number }> {
   return {
     'town-guard': {
@@ -560,6 +716,7 @@ export function hasActiveHero(world: World): boolean {
 }
 
 export function resetWorld(world: World): void {
+  resetDynamicNodes();
   const blank: WorldState = {
     hero: null,
     factions: buildInitialFactions(),
@@ -569,6 +726,7 @@ export function resetWorld(world: World): void {
     currentNodeId: null,
     ambientTrack: undefined,
     discoveredNodes: {},
+    oracleScenes: {},
   };
   (world as unknown as { state: WorldState }).state = blank;
   world.dispatchEvent(new CustomEvent('state-change', { detail: world.snapshot }));
