@@ -1,5 +1,5 @@
 import { html, render } from 'lit-html';
-import type { Hero, FactionStanding, Achievement } from '../systems/types';
+import type { Hero, FactionStanding, Achievement, InventoryItem } from '../systems/types';
 import { SKILLS } from '../systems/types';
 
 interface CharacterSheetData {
@@ -140,6 +140,75 @@ export class DDCharacterSheet extends HTMLElement {
             font-size: 0.9rem;
           }
 
+          .inventory li {
+            align-items: flex-start;
+            gap: 0.75rem;
+          }
+
+          .inventory .item-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            flex: 1;
+          }
+
+          .inventory .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 0.5rem;
+          }
+
+          .inventory .item-type {
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+          }
+
+          .inventory .item-description {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 0.85rem;
+            line-height: 1.4;
+          }
+
+          .inventory .item-bonus,
+          .inventory .item-charges {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(240, 179, 90, 0.85);
+          }
+
+          .inventory .item-charges {
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          .inventory .use-button {
+            align-self: center;
+            background: rgba(240, 179, 90, 0.2);
+            border: 1px solid rgba(240, 179, 90, 0.6);
+            border-radius: 999px;
+            color: inherit;
+            padding: 0.25rem 0.85rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: background 150ms ease, transform 150ms ease;
+          }
+
+          .inventory .use-button:hover:not([disabled]) {
+            background: rgba(240, 179, 90, 0.35);
+            transform: translateY(-1px);
+          }
+
+          .inventory .use-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
           .faction-bar {
             width: 100%;
             height: 6px;
@@ -227,8 +296,43 @@ export class DDCharacterSheet extends HTMLElement {
                     ? hero.inventory.map(
                         (item) => html`
                           <li>
-                            <span>${item.name}</span>
-                            <span>${item.type}</span>
+                            <div class="item-details">
+                              <div class="item-header">
+                                <strong>${item.name}</strong>
+                                <span class="item-type">
+                                  ${(item.type.charAt(0).toUpperCase() + item.type.slice(1)).replace(/-/g, ' ')}
+                                </span>
+                              </div>
+                              <p class="item-description">${item.description}</p>
+                              ${item.bonus
+                                ? html`<div class="item-bonus">
+                                    Bonus:
+                                    ${item.bonus.ability
+                                      ? html`${item.bonus.ability
+                                            .charAt(0)
+                                            .toUpperCase()}${item.bonus.ability.slice(1)} +${item.bonus.value}`
+                                      : html`+${item.bonus.value}`}
+                                  </div>`
+                                : null}
+                              ${typeof item.charges === 'number'
+                                ? html`<div class="item-charges">
+                                    Charges: ${Math.max(0, item.charges)}
+                                    ${typeof item.maxCharges === 'number'
+                                      ? html`<span> / ${item.maxCharges}</span>`
+                                      : null}
+                                  </div>`
+                                : null}
+                            </div>
+                            ${item.type === 'consumable'
+                              ? html`<button
+                                  type="button"
+                                  class="use-button"
+                                  ?disabled=${typeof item.charges === 'number' && item.charges <= 0}
+                                  @click=${() => this.handleUseItem(item)}
+                                >
+                                  Use
+                                </button>`
+                              : null}
                           </li>
                         `,
                       )
@@ -290,6 +394,17 @@ export class DDCharacterSheet extends HTMLElement {
     const max = 10;
     const clamped = Math.max(min, Math.min(max, value));
     return ((clamped - min) / (max - min)) * 100;
+  }
+
+  private handleUseItem(item: InventoryItem): void {
+    if (!item) return;
+    this.dispatchEvent(
+      new CustomEvent('inventory-use', {
+        detail: { itemId: item.id },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 }
 

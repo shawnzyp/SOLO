@@ -365,6 +365,7 @@ export class DDRoot extends HTMLElement {
     this.handleDowntimeTaskCreated = this.handleDowntimeTaskCreated.bind(this);
     this.handleDowntimeTaskProgressed = this.handleDowntimeTaskProgressed.bind(this);
     this.handleDowntimeTaskCompleted = this.handleDowntimeTaskCompleted.bind(this);
+    this.handleInventoryUse = this.handleInventoryUse.bind(this);
   }
 
   connectedCallback(): void {
@@ -378,6 +379,7 @@ export class DDRoot extends HTMLElement {
       this.handleDowntimeTaskProgressed as EventListener,
     );
     this.addEventListener('downtime-task-completed', this.handleDowntimeTaskCompleted as EventListener);
+    this.addEventListener('inventory-use', this.handleInventoryUse as EventListener);
     this.heroOptionsUnsubscribe = subscribeHeroOptions((options) => {
       const reconciled = this.reconcileHeroCreation(this.state.heroCreation, options);
       this.state = {
@@ -532,6 +534,7 @@ export class DDRoot extends HTMLElement {
       this.handleDowntimeTaskProgressed as EventListener,
     );
     this.removeEventListener('downtime-task-completed', this.handleDowntimeTaskCompleted as EventListener);
+    this.removeEventListener('inventory-use', this.handleInventoryUse as EventListener);
     if (this.heroOptionsUnsubscribe) {
       this.heroOptionsUnsubscribe();
       this.heroOptionsUnsubscribe = null;
@@ -584,6 +587,13 @@ export class DDRoot extends HTMLElement {
       }
     }
     this.requestRender();
+  }
+
+  private handleInventoryUse(event: CustomEvent<{ itemId: string }>): void {
+    event.stopPropagation();
+    const { itemId } = event.detail ?? {};
+    if (!itemId) return;
+    this.world.consumeItem(itemId);
   }
 
   private async handleArcaneImprovise(event: CustomEvent<ArcaneImproviseEventDetail>): Promise<void> {
