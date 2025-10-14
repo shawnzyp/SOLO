@@ -163,6 +163,68 @@ export interface DiscoveredNode {
   visits: number;
 }
 
+export type DowntimeFocus = 'Training' | 'Crafting' | 'Research' | 'Social' | 'Exploration';
+
+export type DowntimeRisk = 'low' | 'moderate' | 'high';
+
+export interface DowntimeTask {
+  id: string;
+  title: string;
+  focus: DowntimeFocus;
+  days: number;
+  risk: DowntimeRisk;
+  notes?: string;
+  progress: number;
+  completed: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type DowntimeTaskEventType = 'created' | 'progressed' | 'completed';
+
+export interface DowntimeTaskEventDetail {
+  type: DowntimeTaskEventType;
+  task: DowntimeTask;
+  previousProgress?: number;
+  previouslyCompleted?: boolean;
+}
+
+export interface DowntimeTaskHistoryEntry {
+  timestamp: number;
+  type: DowntimeTaskEventType;
+  progress: number;
+  notes?: string;
+}
+
+export interface DowntimeTaskRecord extends DowntimeTask {
+  history: DowntimeTaskHistoryEntry[];
+}
+
+export interface DowntimeBuff {
+  id: string;
+  sourceTaskId: string;
+  focus: DowntimeFocus;
+  label: string;
+  description: string;
+  magnitude: number;
+  createdAt: number;
+  expiresAt: number | null;
+}
+
+export interface DowntimeState {
+  tasks: Record<string, DowntimeTaskRecord>;
+  activeBuffs: DowntimeBuff[];
+  lastActivityAt?: number;
+}
+
+export interface DowntimeUpdate {
+  eventType: DowntimeTaskEventType;
+  task: DowntimeTask;
+  journalEntry?: string;
+  factionAdjustments?: Array<{ factionId: string; delta: number; reason?: string }>;
+  buff?: DowntimeBuff | null;
+}
+
 export interface WorldState {
   hero: Hero | null;
   factions: Record<string, FactionStanding>;
@@ -173,6 +235,7 @@ export interface WorldState {
   ambientTrack?: string;
   discoveredNodes: Record<string, DiscoveredNode>;
   oracleScenes: Record<string, OracleSceneRecord>;
+  downtime: DowntimeState;
 }
 
 export interface Condition {

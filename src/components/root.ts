@@ -22,6 +22,13 @@ import type {
   Achievement,
   JournalEntry,
   DiscoveredNode,
+  DowntimeTask,
+  DowntimeTaskEventDetail,
+  DowntimeTaskEventType,
+  DowntimeUpdate,
+  DowntimeFocus,
+  DowntimeRisk,
+  DowntimeBuff,
 } from '../systems/types';
 import { World, type ToastMessage } from '../systems/world';
 import {
@@ -76,6 +83,8 @@ type SkillCheckMeta = {
 type RenderChoice = StoryChoice & { disabled?: boolean; skillCheckMeta?: SkillCheckMeta };
 
 type MapNode = DiscoveredNode & { isCurrent: boolean };
+
+type DowntimeFactionAdjustment = NonNullable<DowntimeUpdate['factionAdjustments']>[number];
 
 interface HeroCreationAbilities {
   method: AbilityGenerationMethod;
@@ -353,6 +362,9 @@ export class DDRoot extends HTMLElement {
     this.handleCombatAction = this.handleCombatAction.bind(this);
     this.handleArcaneImprovise = this.handleArcaneImprovise.bind(this);
     this.handleArcaneCancel = this.handleArcaneCancel.bind(this);
+    this.handleDowntimeTaskCreated = this.handleDowntimeTaskCreated.bind(this);
+    this.handleDowntimeTaskProgressed = this.handleDowntimeTaskProgressed.bind(this);
+    this.handleDowntimeTaskCompleted = this.handleDowntimeTaskCompleted.bind(this);
   }
 
   connectedCallback(): void {
@@ -360,6 +372,12 @@ export class DDRoot extends HTMLElement {
     this.addEventListener('combat-action', this.handleCombatAction as EventListener);
     this.addEventListener('arcane-improvise', this.handleArcaneImprovise as EventListener);
     this.addEventListener('arcane-cancel', this.handleArcaneCancel as EventListener);
+    this.addEventListener('downtime-task-created', this.handleDowntimeTaskCreated as EventListener);
+    this.addEventListener(
+      'downtime-task-progressed',
+      this.handleDowntimeTaskProgressed as EventListener,
+    );
+    this.addEventListener('downtime-task-completed', this.handleDowntimeTaskCompleted as EventListener);
     this.heroOptionsUnsubscribe = subscribeHeroOptions((options) => {
       const reconciled = this.reconcileHeroCreation(this.state.heroCreation, options);
       this.state = {
@@ -508,6 +526,12 @@ export class DDRoot extends HTMLElement {
     this.removeEventListener('combat-action', this.handleCombatAction as EventListener);
     this.removeEventListener('arcane-improvise', this.handleArcaneImprovise as EventListener);
     this.removeEventListener('arcane-cancel', this.handleArcaneCancel as EventListener);
+    this.removeEventListener('downtime-task-created', this.handleDowntimeTaskCreated as EventListener);
+    this.removeEventListener(
+      'downtime-task-progressed',
+      this.handleDowntimeTaskProgressed as EventListener,
+    );
+    this.removeEventListener('downtime-task-completed', this.handleDowntimeTaskCompleted as EventListener);
     if (this.heroOptionsUnsubscribe) {
       this.heroOptionsUnsubscribe();
       this.heroOptionsUnsubscribe = null;
@@ -635,6 +659,24 @@ export class DDRoot extends HTMLElement {
     }
   }
 
+  private handleDowntimeTaskCreated(event: CustomEvent<DowntimeTaskEventDetail>): void {
+    event.stopPropagation();
+    const update = this.buildDowntimeUpdate('created', event.detail);
+    this.world.applyDowntimeUpdate(update);
+  }
+
+  private handleDowntimeTaskProgressed(event: CustomEvent<DowntimeTaskEventDetail>): void {
+    event.stopPropagation();
+    const update = this.buildDowntimeUpdate('progressed', event.detail);
+    this.world.applyDowntimeUpdate(update);
+  }
+
+  private handleDowntimeTaskCompleted(event: CustomEvent<DowntimeTaskEventDetail>): void {
+    event.stopPropagation();
+    const update = this.buildDowntimeUpdate('completed', event.detail);
+    this.world.applyDowntimeUpdate(update);
+  }
+
   private pushToast(toast: ToastMessage): void {
     this.state = {
       ...this.state,
@@ -648,6 +690,174 @@ export class DDRoot extends HTMLElement {
       };
       this.requestRender();
     }, 4000);
+  }
+
+  private buildDowntimeUpdate(
+    eventType: DowntimeTaskEventType,
+    detail: DowntimeTaskEventDetail,
+  ): DowntimeUpdate {
+    const heroName = this.state.hero?.name ?? 'The lone adventurer';
+    const previousProgress =
+      typeof detail.previousProgress === 'number' && Number.isFinite(detail.previousProgress)
+        ? detail.previousProgress
+        : 0;
+    const progressDelta = detail.task.progress - previousProgress;
+    const update: DowntimeUpdate = {
+      eventType,
+      task: detail.task,
+    };
+
+    switch (eventType) {
+      case 'created':
+        update.journalEntry = `${heroName} charts downtime: ${detail.task.title} (${detail.task.focus}).`;
+        break;
+      case 'progressed': {
+        update.journalEntry =
+          progressDelta > 0
+            ? `${heroName} advances ${detail.task.title} to ${detail.task.progress}% completion.`
+            : `${heroName} revisits ${detail.task.title}.`;
+        const adjustment = this.deriveFactionAdjustment(detail.task, eventType, previousProgress);
+        if (adjustment) {
+          update.factionAdjustments = [adjustment];
+        }
+        if (detail.previouslyCompleted && !detail.task.completed) {
+          update.buff = null;
+        }
+        break;
+      }
+      case 'completed': {
+        update.journalEntry = `${heroName} completes ${detail.task.title}, ready to leverage the results.`;
+        const adjustment = this.deriveFactionAdjustment(detail.task, eventType, previousProgress);
+        if (adjustment) {
+          update.factionAdjustments = [adjustment];
+        }
+        update.buff = this.createDowntimeBuff(detail.task);
+        break;
+      }
+      default:
+        break;
+    }
+
+    return update;
+  }
+
+  private deriveFactionAdjustment(
+    task: DowntimeTask,
+    eventType: DowntimeTaskEventType,
+    previousProgress?: number,
+  ): DowntimeFactionAdjustment | null {
+    const factionId = this.getDowntimeFaction(task);
+    if (!factionId) return null;
+    const intensity = this.getRiskIntensity(task.risk);
+    const prior = Math.max(0, previousProgress ?? 0);
+    const progressDelta = task.progress - prior;
+    let delta = 0;
+
+    if (eventType === 'progressed') {
+      const milestoneReached = prior < 50 && task.progress >= 50;
+      if (milestoneReached) {
+        delta = Math.max(1, intensity - 1);
+      } else if (progressDelta >= 15) {
+        delta = 1;
+      }
+    } else if (eventType === 'completed') {
+      delta = Math.max(1, intensity);
+      if (task.risk === 'high') {
+        delta += 1;
+      }
+    }
+
+    if (delta <= 0) return null;
+
+    const factionName = this.getFactionName(factionId);
+    const reason =
+      eventType === 'completed'
+        ? `${task.title} completed, impressing the ${factionName}.`
+        : `${task.title} progress earned favor with the ${factionName}.`;
+
+    return { factionId, delta, reason };
+  }
+
+  private getDowntimeFaction(task: DowntimeTask): string | null {
+    const mapping: Record<DowntimeFocus, string | null> = {
+      Training: 'town-guard',
+      Crafting: 'black-guild',
+      Research: 'circle',
+      Social: 'town-guard',
+      Exploration: 'circle',
+    };
+    return mapping[task.focus] ?? null;
+  }
+
+  private getRiskIntensity(risk: DowntimeRisk): number {
+    switch (risk) {
+      case 'high':
+        return 3;
+      case 'moderate':
+        return 2;
+      default:
+        return 1;
+    }
+  }
+
+  private getFactionName(factionId: string): string {
+    const faction = this.state.factions.find((entry) => entry.id === factionId);
+    if (faction) {
+      return faction.name;
+    }
+    const snapshot = this.world.snapshot.factions[factionId];
+    return snapshot?.name ?? factionId;
+  }
+
+  private createDowntimeBuff(task: DowntimeTask): DowntimeBuff {
+    const now = Date.now();
+    const durationMs = Math.max(1, Math.round(task.days)) * 24 * 60 * 60 * 1000;
+    const { label, description } = this.describeDowntimeBuff(task);
+    return {
+      id: `downtime-buff-${task.id}`,
+      sourceTaskId: task.id,
+      focus: task.focus,
+      label,
+      description,
+      magnitude: this.getRiskIntensity(task.risk),
+      createdAt: now,
+      expiresAt: now + durationMs,
+    };
+  }
+
+  private describeDowntimeBuff(task: DowntimeTask): { label: string; description: string } {
+    switch (task.focus) {
+      case 'Training':
+        return {
+          label: 'Sharpened Instincts',
+          description: `Drills from “${task.title}” keep reactions honed for the next encounter.`,
+        };
+      case 'Crafting':
+        return {
+          label: 'Masterwork Momentum',
+          description: `Fresh creations from “${task.title}” inspire inventive battlefield solutions.`,
+        };
+      case 'Research':
+        return {
+          label: 'Arcane Insight',
+          description: `Revelations from “${task.title}” illuminate esoteric threats ahead.`,
+        };
+      case 'Social':
+        return {
+          label: 'Trusted Contacts',
+          description: `Allies rallied during “${task.title}” are ready to lend timely aid.`,
+        };
+      case 'Exploration':
+        return {
+          label: 'Trailblazer’s Edge',
+          description: `Field notes from “${task.title}” sharpen awareness on the road.`,
+        };
+      default:
+        return {
+          label: 'Steady Resolve',
+          description: `Time invested in “${task.title}” leaves the adventurer calm and prepared.`,
+        };
+    }
   }
 
   private handleHeroCreationSubmit(event: Event): void {

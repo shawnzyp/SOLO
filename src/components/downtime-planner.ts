@@ -1,22 +1,13 @@
 import { html, render } from 'lit-html';
-import type { Hero } from '../systems/types';
 import { SKILLS } from '../systems/types';
-
-type DowntimeFocus = 'Training' | 'Crafting' | 'Research' | 'Social' | 'Exploration';
-type DowntimeRisk = 'low' | 'moderate' | 'high';
-
-interface DowntimeTask {
-  id: string;
-  title: string;
-  focus: DowntimeFocus;
-  days: number;
-  risk: DowntimeRisk;
-  notes?: string;
-  progress: number;
-  completed: boolean;
-  createdAt: number;
-  updatedAt: number;
-}
+import type {
+  Hero,
+  DowntimeTask,
+  DowntimeFocus,
+  DowntimeRisk,
+  DowntimeTaskEventType,
+  DowntimeTaskEventDetail,
+} from '../systems/types';
 
 interface DowntimePlannerState {
   hero: Hero | null;
@@ -126,6 +117,31 @@ export class DDDowntimePlanner extends HTMLElement {
     }
   }
 
+  private dispatchTaskEvent(
+    type: DowntimeTaskEventType,
+    task: DowntimeTask,
+    previousProgress?: number,
+    previouslyCompleted?: boolean,
+  ): void {
+    const detail: DowntimeTaskEventDetail = {
+      type,
+      task: { ...task },
+    };
+    if (typeof previousProgress === 'number') {
+      detail.previousProgress = previousProgress;
+    }
+    if (typeof previouslyCompleted === 'boolean') {
+      detail.previouslyCompleted = previouslyCompleted;
+    }
+    this.dispatchEvent(
+      new CustomEvent<DowntimeTaskEventDetail>(`downtime-task-${type}`, {
+        detail,
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   private setFocusFilter(focus: DowntimeFocus | 'all'): void {
     this.focusFilter = focus;
     this.update();
@@ -179,6 +195,7 @@ export class DDDowntimePlanner extends HTMLElement {
     this.tasks = [task, ...this.tasks];
     this.resetDraft();
     this.persist();
+    this.dispatchTaskEvent('created', task, 0, false);
     this.update();
   }
 
@@ -204,36 +221,56 @@ export class DDDowntimePlanner extends HTMLElement {
     this.tasks = [task, ...this.tasks];
     this.focusFilter = suggestion.focus;
     this.persist();
+    this.dispatchTaskEvent('created', task, 0, false);
     this.update();
   }
 
   private toggleTaskCompletion(taskId: string): void {
-    this.tasks = this.tasks.map((task) => {
-      if (task.id !== taskId) return task;
-      const completed = !task.completed;
-      return {
-        ...task,
-        completed,
-        progress: completed ? 100 : clampProgress(task.progress),
-        updatedAt: Date.now(),
-      };
-    });
+    const existing = this.tasks.find((task) => task.id === taskId);
+    if (!existing) return;
+    const completed = !existing.completed;
+    const updated: DowntimeTask = {
+      ...existing,
+      completed,
+      progress: completed ? 100 : clampProgress(existing.progress),
+      updatedAt: Date.now(),
+    };
+    this.tasks = this.tasks.map((task) => (task.id === taskId ? updated : task));
     this.persist();
+    this.dispatchTaskEvent(
+      completed ? 'completed' : 'progressed',
+      updated,
+      existing.progress,
+      existing.completed,
+    );
     this.update();
   }
 
   private updateProgress(taskId: string, progress: number): void {
+    const previous = this.tasks.find((task) => task.id === taskId);
+    if (!previous) return;
+    const normalized = clampProgress(progress);
+    let updated: DowntimeTask | null = null;
     this.tasks = this.tasks.map((task) => {
       if (task.id !== taskId) return task;
-      const normalized = clampProgress(progress);
-      return {
+      const completed = normalized >= 100 ? true : task.completed;
+      updated = {
         ...task,
         progress: normalized,
-        completed: normalized >= 100 ? true : task.completed,
+        completed,
         updatedAt: Date.now(),
       };
+      return updated;
     });
+    if (!updated) return;
     this.persist();
+    if (normalized === previous.progress && previous.completed === updated.completed) {
+      this.update();
+      return;
+    }
+    const eventType: DowntimeTaskEventType =
+      !previous.completed && updated.completed ? 'completed' : 'progressed';
+    this.dispatchTaskEvent(eventType, updated, previous.progress, previous.completed);
     this.update();
   }
 
