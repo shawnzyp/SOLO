@@ -256,9 +256,13 @@ export class World implements EventTarget {
     };
   }
 
-  concludeCombat(result: 'victory' | 'defeat' | 'flee', encounter: CombatEncounter): void {
+  concludeCombat(result: 'victory' | 'defeat' | 'flee', encounter: CombatEncounter, heroOutcome?: Hero): void {
     const toastMessages: ToastMessage[] = [];
     let outcome: 'victory' | 'defeat' | 'flee' = 'victory';
+
+    if (heroOutcome) {
+      this.updateHero(heroOutcome);
+    }
 
     if (result === 'victory') {
       if (encounter.victoryEffects) {
@@ -308,6 +312,7 @@ export class World implements EventTarget {
 
     toastMessages.forEach((toast) => this.emit('toast', toast));
     this.persist();
+    this.emit('state-change', this.snapshot);
   }
 
   setCurrentNode(nodeId: string): void {

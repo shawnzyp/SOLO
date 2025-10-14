@@ -538,10 +538,10 @@ export class DDRoot extends HTMLElement {
     this.world.applyChoice(choice);
   }
 
-  private handleCombatAction(event: CustomEvent<{ action: CombatAction }>): void {
+  private handleCombatAction(event: CustomEvent<{ action: CombatAction; itemId?: string }>): void {
     event.stopPropagation();
     if (!this.combatSession || !this.state.combat.encounter) return;
-    const snapshot = this.combatSession.perform(event.detail.action);
+    const snapshot = this.combatSession.perform(event.detail.action, event.detail.itemId);
     this.state = {
       ...this.state,
       combat: {
@@ -549,12 +549,15 @@ export class DDRoot extends HTMLElement {
         snapshot,
       },
     };
-    if (snapshot.status === 'victory') {
-      this.world.concludeCombat('victory', this.state.combat.encounter);
-    } else if (snapshot.status === 'defeat') {
-      this.world.concludeCombat('defeat', this.state.combat.encounter);
-    } else if (snapshot.status === 'fled') {
-      this.world.concludeCombat('flee', this.state.combat.encounter);
+    if (snapshot.status !== 'ongoing') {
+      const heroOutcome = this.combatSession.getHeroOutcome();
+      if (snapshot.status === 'victory') {
+        this.world.concludeCombat('victory', this.state.combat.encounter, heroOutcome);
+      } else if (snapshot.status === 'defeat') {
+        this.world.concludeCombat('defeat', this.state.combat.encounter, heroOutcome);
+      } else if (snapshot.status === 'fled') {
+        this.world.concludeCombat('flee', this.state.combat.encounter, heroOutcome);
+      }
     }
     this.requestRender();
   }
