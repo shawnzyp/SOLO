@@ -7,12 +7,24 @@ import {
   type StoryChoice,
   type StoryNode,
 } from './types';
+import type {
+  ChatCompletion,
+  ChatCompletionRequestNonStreaming,
+  InitProgressReport,
+  MLCEngine,
+  ModelRecord,
+} from '@mlc-ai/web-llm';
 
 interface StorytellerConfig {
   endpoint?: string;
   apiKey?: string;
   model?: string;
   timeoutMs?: number;
+}
+
+interface ImproviseOptions {
+  signal?: AbortSignal;
+  onStatus?: (status: string) => void;
 }
 
 interface ExternalStoryChoice {
@@ -40,12 +52,47 @@ interface ExternalStoryNode {
   choices?: unknown;
 }
 
+type WebLLMModule = typeof import('@mlc-ai/web-llm');
+
+interface WebLLMPayload {
+  prompt: string;
+  hero: {
+    name: string;
+    class: string;
+    classId: string;
+    background: string;
+    backgroundId: string;
+    level: number;
+  } | null;
+  returnNodeId: string | null;
+  context: ArcaneNarrativeContext;
+}
+
 function createRandomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function isAbortError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && (error as { name?: string }).name === 'AbortError');
+}
+
+function createAbortError(): Error {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function safeOnStatus(
+  callback: ((status: string) => void) | undefined,
+  status: string,
+  signal?: AbortSignal,
+): void {
+  if (!callback || (signal?.aborted ?? false)) return;
+  callback(status);
+}
+
+function supportsWebGPU(): boolean {
+  return typeof navigator !== 'undefined' && 'gpu' in navigator;
 }
 
 function cloneChoice(choice: StoryChoice): StoryChoice {
@@ -80,6 +127,9 @@ export class ArcaneStorytellerEngine {
   private readonly apiKey: string | null;
   private readonly model: string | null;
   private readonly timeoutMs: number;
+  private webllmModulePromise: Promise<WebLLMModule> | null = null;
+  private webllmEnginePromise: Promise<MLCEngine> | null = null;
+  private webllmModelId: string | null = null;
 
   constructor(config: StorytellerConfig = {}) {
     this.endpoint = config.endpoint?.trim() ?? '';
@@ -93,34 +143,62 @@ export class ArcaneStorytellerEngine {
     hero: Hero | null,
     returnNodeId: string | null,
     narrativeContext: ArcaneNarrativeContext,
-    signal?: AbortSignal,
+    options?: ImproviseOptions,
   ): Promise<ArcaneNarrativeResult> {
     const narrativeSignals: ArcaneNarrativeContext = {
       ...narrativeContext,
       prompt,
       returnNodeId,
     };
+    const signal = options?.signal;
+    const onStatus = options?.onStatus;
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
+
     if (this.endpoint) {
+      safeOnStatus(onStatus, 'Contacting the remote oracle…', signal);
       try {
         const llmResult = await this.invokeEndpoint(
           prompt,
           hero,
           returnNodeId,
           narrativeSignals,
-          signal,
+          options,
         );
         if (llmResult) {
           return llmResult;
         }
+        safeOnStatus(onStatus, 'Remote oracle unavailable. Seeking another source…', signal);
       } catch (error) {
         if (isAbortError(error)) {
           throw error;
         }
         console.warn('Arcane storyteller endpoint failed, falling back to offline oracle.', error);
+        safeOnStatus(onStatus, 'Remote oracle faltered; attuning to local arcana…', signal);
       }
     }
 
-    return this.generateOffline(prompt, hero, returnNodeId, narrativeSignals);
+    try {
+      const localResult = await this.improviseWithWebLLM(
+        prompt,
+        hero,
+        returnNodeId,
+        narrativeSignals,
+        options,
+      );
+      if (localResult) {
+        return localResult;
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      console.warn('Arcane storyteller WebLLM failed, falling back to offline oracle.', error);
+      safeOnStatus(onStatus, 'Local oracle could not respond. Relying on offline lore…', signal);
+    }
+
+    return this.generateOffline(prompt, hero, returnNodeId, narrativeSignals, options);
   }
 
   private async invokeEndpoint(
@@ -128,27 +206,25 @@ export class ArcaneStorytellerEngine {
     hero: Hero | null,
     returnNodeId: string | null,
     narrativeContext: ArcaneNarrativeContext,
-    signal?: AbortSignal,
+    options?: ImproviseOptions,
   ): Promise<ArcaneNarrativeResult | null> {
     if (typeof fetch === 'undefined') return null;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const signal = options?.signal;
+    let abortListener: (() => void) | null = null;
     if (signal) {
       if (signal.aborted) {
         controller.abort();
       } else {
-        const abortListener = () => controller.abort();
+        abortListener = () => controller.abort();
         signal.addEventListener('abort', abortListener, { once: true });
-        controller.signal.addEventListener(
-          'abort',
-          () => signal.removeEventListener('abort', abortListener),
-          { once: true },
-        );
       }
     }
 
     try {
+      safeOnStatus(options?.onStatus, 'Awaiting the remote oracle…', signal);
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
@@ -186,6 +262,7 @@ export class ArcaneStorytellerEngine {
       const node = this.normalizeExternalNode(rawNode, returnNodeId);
       if (!node) return null;
 
+      safeOnStatus(options?.onStatus, 'Remote oracle replied.', signal);
       return {
         node,
         origin: 'oracle-llm',
@@ -193,7 +270,276 @@ export class ArcaneStorytellerEngine {
       };
     } finally {
       clearTimeout(timeout);
+      if (abortListener && signal) {
+        signal.removeEventListener('abort', abortListener);
+      }
     }
+  }
+
+  private async improviseWithWebLLM(
+    prompt: string,
+    hero: Hero | null,
+    returnNodeId: string | null,
+    narrativeContext: ArcaneNarrativeContext,
+    options?: ImproviseOptions,
+  ): Promise<ArcaneNarrativeResult | null> {
+    if (typeof window === 'undefined') return null;
+    const signal = options?.signal;
+    if (!supportsWebGPU()) {
+      safeOnStatus(options?.onStatus, 'Local oracle unavailable: WebGPU support not detected.', signal);
+      return null;
+    }
+
+    let engine: MLCEngine | null = null;
+    try {
+      engine = await this.ensureWebLLMEngine(options);
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      console.warn('Arcane storyteller failed to initialize the WebLLM engine.', error);
+      return null;
+    }
+
+    if (!engine) {
+      return null;
+    }
+
+    safeOnStatus(options?.onStatus, 'Consulting the local oracle…', signal);
+
+    const request: ChatCompletionRequestNonStreaming = {
+      messages: [
+        { role: 'system', content: this.buildWebLLMSystemPrompt() },
+        {
+          role: 'user',
+          content: JSON.stringify(
+            this.buildWebLLMPayload(prompt, hero, returnNodeId, narrativeContext),
+            null,
+            2,
+          ),
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 700,
+      response_format: { type: 'json_object' },
+    };
+
+    const completionPromise = engine.chat.completions.create(request) as Promise<ChatCompletion>;
+    let completion: ChatCompletion;
+    try {
+      completion = await this.withAbort(completionPromise, signal, () => engine?.interruptGenerate());
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      console.warn('Arcane storyteller WebLLM request failed.', error);
+      return null;
+    }
+
+    const content = this.extractWebLLMContent(completion);
+    if (!content) {
+      console.warn('Arcane storyteller WebLLM returned empty content.');
+      return null;
+    }
+
+    let parsed: { node?: ExternalStoryNode } | ExternalStoryNode;
+    try {
+      parsed = JSON.parse(content) as { node?: ExternalStoryNode } | ExternalStoryNode;
+    } catch (error) {
+      console.warn('Arcane storyteller WebLLM returned invalid JSON.', error);
+      return null;
+    }
+
+    const rawNode =
+      parsed && typeof parsed === 'object' && 'node' in parsed
+        ? (parsed as { node?: ExternalStoryNode }).node ?? null
+        : parsed;
+    if (!rawNode) {
+      console.warn('Arcane storyteller WebLLM payload missing node definition.');
+      return null;
+    }
+
+    const node = this.normalizeExternalNode(rawNode, returnNodeId);
+    if (!node) {
+      console.warn('Arcane storyteller WebLLM response could not be normalized.');
+      return null;
+    }
+
+    safeOnStatus(options?.onStatus, 'Local oracle replied.', signal);
+    return {
+      node,
+      origin: 'oracle-llm',
+      prompt,
+    };
+  }
+
+  private async ensureWebLLMEngine(options?: ImproviseOptions): Promise<MLCEngine | null> {
+    if (typeof window === 'undefined') return null;
+
+    const module = await this.loadWebLLMModule().catch((error) => {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      console.warn('Arcane storyteller could not load WebLLM module.', error);
+      return null;
+    });
+    if (!module) {
+      return null;
+    }
+
+    if (!this.webllmEnginePromise) {
+      const modelId = this.selectWebLLMModelId(module.prebuiltAppConfig?.model_list ?? []);
+      const updateStatus = (report: InitProgressReport) => {
+        const ratio = typeof report.progress === 'number' ? Math.max(0, Math.min(1, report.progress)) : null;
+        const stage = report.text ?? report.stage ?? 'Preparing the local oracle…';
+        const prefix = ratio !== null ? `[${Math.round(ratio * 100)}%] ` : '';
+        safeOnStatus(options?.onStatus, `${prefix}${stage}`, options?.signal);
+      };
+
+      safeOnStatus(options?.onStatus, `Loading local oracle model (${modelId})…`, options?.signal);
+      this.webllmEnginePromise = module
+        .CreateMLCEngine(modelId, { initProgressCallback: updateStatus })
+        .then((engine) => {
+          safeOnStatus(options?.onStatus, 'Local oracle ready.', options?.signal);
+          return engine;
+        })
+        .catch((error) => {
+          this.webllmEnginePromise = null;
+          throw error;
+        });
+    } else {
+      safeOnStatus(options?.onStatus, 'Local oracle ready.', options?.signal);
+    }
+
+    try {
+      return await this.webllmEnginePromise;
+    } catch (error) {
+      this.webllmEnginePromise = null;
+      throw error;
+    }
+  }
+
+  private async loadWebLLMModule(): Promise<WebLLMModule> {
+    if (this.webllmModulePromise) {
+      return this.webllmModulePromise;
+    }
+
+    this.webllmModulePromise = import('@mlc-ai/web-llm') as Promise<WebLLMModule>;
+    try {
+      return await this.webllmModulePromise;
+    } catch (error) {
+      this.webllmModulePromise = null;
+      throw error;
+    }
+  }
+
+  private selectWebLLMModelId(models: ModelRecord[]): string {
+    if (this.webllmModelId) {
+      return this.webllmModelId;
+    }
+    const preferred = models.find((entry) => /gemma-2.*2b.*it/i.test(entry.model_id));
+    const fallback = models.find((entry) => /phi-3\.5.*mini.*it/i.test(entry.model_id));
+    const selected = preferred ?? fallback ?? models[0];
+    this.webllmModelId = selected?.model_id ?? 'Llama-3.1-8B-Instruct-q4f16_1-MLC';
+    return this.webllmModelId;
+  }
+
+  private buildWebLLMSystemPrompt(): string {
+    return [
+      'You are the Arcane Storyteller for a solo Dungeons & Dragons journaling experience.',
+      'Craft an immersive fantasy scene as structured JSON. Follow this schema:',
+      '{',
+      '  "node": {',
+      '    "title": "evocative title (max 90 characters)",',
+      '    "summary": "1-2 sentence scene summary",',
+      '    "background": "CSS gradient or color string",',
+      '    "ambient": "optional ambient audio hint or null",',
+      '    "tags": ["Oracle", "LLM", "..."],',
+      '    "body": ["2-4 sentence paragraph", "..."],',
+      '    "choices": [',
+      '      {',
+      '        "id": "kebab-case-id",',
+      '        "text": "Short imperative option",',
+      '        "description": "1 sentence elaboration",',
+      '        "toNode": "target node id or null",',
+      '        "effects": [],',
+      '        "skillCheck": null',
+      '      }',
+      '    ]',
+      '  }',
+      '}',
+      'Rules:',
+      '- Keep everything PG-13 and avoid graphic violence.',
+      '- Use second-person narration for paragraphs.',
+      '- Produce exactly three distinct choices.',
+      '- If a returnNodeId is provided, at least one choice must use it as the toNode.',
+      '- Weave details from the prompt, hero, and context to keep continuity.',
+      '- Provide rich sensory details and stakes without referencing dice mechanics.',
+      '- Respond with compact JSON only—no extra commentary.',
+    ].join('\n');
+  }
+
+  private buildWebLLMPayload(
+    prompt: string,
+    hero: Hero | null,
+    returnNodeId: string | null,
+    narrativeContext: ArcaneNarrativeContext,
+  ): WebLLMPayload {
+    return {
+      prompt,
+      hero: hero
+        ? {
+            name: hero.name,
+            class: hero.heroClass.name,
+            classId: hero.heroClass.id,
+            background: hero.background.name,
+            backgroundId: hero.background.id,
+            level: hero.level,
+          }
+        : null,
+      returnNodeId,
+      context: narrativeContext,
+    };
+  }
+
+  private extractWebLLMContent(completion: ChatCompletion): string | null {
+    const choice = completion.choices?.[0];
+    const content = choice?.message?.content;
+    return typeof content === 'string' ? content.trim() : null;
+  }
+
+  private async withAbort<T>(
+    promise: Promise<T>,
+    signal?: AbortSignal,
+    onAbort?: () => void | Promise<void>,
+  ): Promise<T> {
+    if (!signal) {
+      return promise;
+    }
+    if (signal.aborted) {
+      await onAbort?.();
+      throw createAbortError();
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      const abortHandler = () => {
+        signal.removeEventListener('abort', abortHandler);
+        Promise.resolve(onAbort?.())
+          .then(() => reject(createAbortError()))
+          .catch(reject);
+      };
+      signal.addEventListener('abort', abortHandler, { once: true });
+      promise.then(
+        (value) => {
+          signal.removeEventListener('abort', abortHandler);
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener('abort', abortHandler);
+          reject(error);
+        },
+      );
+    });
   }
 
   private normalizeExternalNode(raw: ExternalStoryNode, returnNodeId: string | null): StoryNode | null {
@@ -333,7 +679,9 @@ export class ArcaneStorytellerEngine {
     hero: Hero | null,
     returnNodeId: string | null,
     narrativeContext: ArcaneNarrativeContext,
+    options?: ImproviseOptions,
   ): ArcaneNarrativeResult {
+    safeOnStatus(options?.onStatus, 'Consulting offline oracle blueprints…', options?.signal);
     const { blueprint, motif } = pickBlueprint(hero, prompt, narrativeContext);
     const heroName = hero?.name ?? 'The adventurer';
     const heroClassName = hero?.heroClass.name ?? 'wanderer';
@@ -406,6 +754,7 @@ export class ArcaneStorytellerEngine {
       choices: safeChoices.map((choice) => cloneChoice(choice)),
     };
 
+    safeOnStatus(options?.onStatus, 'Offline oracle replied.', options?.signal);
     return { node, origin: 'oracle-blueprint', prompt };
   }
 

@@ -609,7 +609,7 @@ export class DDRoot extends HTMLElement {
       ...this.state,
       storyteller: {
         busy: true,
-        status: 'Conjuring an unpredictable narrative thread...',
+        status: 'Conjuring an unpredictable narrative thread…',
         error: null,
         origin: null,
         requestId,
@@ -618,7 +618,25 @@ export class DDRoot extends HTMLElement {
     this.requestRender();
 
     try {
-      const result = await this.world.improviseNarrative(prompt, { signal: abortController.signal });
+      const updateStatus = (status: string) => {
+        if (abortController.signal.aborted) return;
+        this.state = {
+          ...this.state,
+          storyteller: {
+            ...this.state.storyteller,
+            busy: true,
+            status,
+            error: null,
+            origin: null,
+            requestId,
+          },
+        };
+        this.requestRender();
+      };
+      const result = await this.world.improviseNarrative(prompt, {
+        signal: abortController.signal,
+        onStatus: updateStatus,
+      });
       const originLabel = result.origin === 'oracle-llm'
         ? 'A remote oracle inscribed this scene.'
         : 'The offline oracle spun this tale.';

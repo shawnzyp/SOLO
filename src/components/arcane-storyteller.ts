@@ -29,6 +29,7 @@ interface ArcaneCancelDetail {
 export class DDArcaneStoryteller extends HTMLElement {
   private state: ArcaneStorytellerPanelState = { ...DEFAULT_STATE };
   private prompt = '';
+  private statusLog: string[] = [];
 
   constructor() {
     super();
@@ -36,7 +37,25 @@ export class DDArcaneStoryteller extends HTMLElement {
   }
 
   set data(value: ArcaneStorytellerPanelState | null) {
-    this.state = value ? { ...DEFAULT_STATE, ...value } : { ...DEFAULT_STATE };
+    const previous = this.state;
+    if (!value) {
+      this.state = { ...DEFAULT_STATE };
+      this.statusLog = [];
+      this.requestRender();
+      return;
+    }
+
+    this.state = { ...DEFAULT_STATE, ...value };
+    const next = this.state;
+    if (next.requestId && next.requestId !== previous.requestId) {
+      this.statusLog = [];
+    }
+    if (next.status && next.status !== previous.status) {
+      this.pushLogEntry(next.status);
+    }
+    if (next.error && next.error !== previous.error) {
+      this.pushLogEntry(`Error: ${next.error}`);
+    }
     this.requestRender();
   }
 
@@ -218,6 +237,36 @@ export class DDArcaneStoryteller extends HTMLElement {
             font-size: 0.75rem;
             color: rgba(200, 200, 255, 0.6);
           }
+
+          .progress-log {
+            border-radius: 12px;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(10, 8, 22, 0.7);
+            max-height: 160px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            display: grid;
+            gap: 0.35rem;
+          }
+
+          .progress-log.empty {
+            color: rgba(200, 200, 255, 0.6);
+            justify-content: center;
+            align-content: center;
+            min-height: 64px;
+            text-align: center;
+          }
+
+          .progress-log-entry {
+            color: rgba(215, 223, 255, 0.85);
+            line-height: 1.4;
+          }
+
+          .progress-log-entry:last-child {
+            color: rgba(255, 255, 255, 0.95);
+          }
         </style>
         <h2>
           Arcane Storyteller
@@ -254,10 +303,29 @@ export class DDArcaneStoryteller extends HTMLElement {
             <strong>${statusLabel}</strong>
             <span>${error ?? status}</span>
           </div>
+          <div class="progress-log ${this.statusLog.length === 0 ? 'empty' : ''}">
+            ${this.statusLog.length === 0
+              ? html`<span>Awaiting the oracle's whispers.</span>`
+              : this.statusLog.map(
+                  (entry) => html`<div class="progress-log-entry">${entry}</div>`,
+                )}
+          </div>
         </form>
       `,
       this.shadowRoot,
     );
+  }
+
+  private pushLogEntry(message: string): void {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    if (!this.statusLog.length && trimmed === DEFAULT_STATE.status) {
+      return;
+    }
+    if (this.statusLog[this.statusLog.length - 1] === trimmed) {
+      return;
+    }
+    this.statusLog = [...this.statusLog, trimmed].slice(-40);
   }
 
   private handleInput(event: Event): void {
