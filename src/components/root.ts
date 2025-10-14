@@ -717,6 +717,23 @@ export class DDRoot extends HTMLElement {
       task: detail.task,
     };
 
+    let resolutionNote: string | null = null;
+    if (detail.resolution) {
+      update.resolution = detail.resolution;
+      if (detail.resolution.effects && detail.resolution.effects.length > 0) {
+        const clonedEffects = detail.resolution.effects.map((effect) => ({ ...effect }));
+        update.effects = [...(update.effects ?? []), ...clonedEffects];
+      }
+      const deltaText = detail.resolution.progressDelta >= 0
+        ? `+${detail.resolution.progressDelta}%`
+        : `${detail.resolution.progressDelta}%`;
+      resolutionNote = `${detail.resolution.summary} (${deltaText} progress).`;
+      update.toasts = [
+        ...(update.toasts ?? []),
+        { title: detail.task.title, body: resolutionNote, tone: detail.resolution.tone },
+      ];
+    }
+
     switch (eventType) {
       case 'created':
         update.journalEntry = `${heroName} charts downtime: ${detail.task.title} (${detail.task.focus}).`;
@@ -746,6 +763,12 @@ export class DDRoot extends HTMLElement {
       }
       default:
         break;
+    }
+
+    if (resolutionNote) {
+      update.journalEntry = update.journalEntry
+        ? `${update.journalEntry} ${resolutionNote}`
+        : `${heroName} notes: ${resolutionNote}`;
     }
 
     return update;

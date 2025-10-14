@@ -1,3 +1,5 @@
+import type { RollResult } from './dice';
+
 export type Ability =
   | 'strength'
   | 'dexterity'
@@ -167,6 +169,41 @@ export type DowntimeFocus = 'Training' | 'Crafting' | 'Research' | 'Social' | 'E
 
 export type DowntimeRisk = 'low' | 'moderate' | 'high';
 
+export type DowntimeOutcomeId =
+  | 'critical-failure'
+  | 'failure'
+  | 'success'
+  | 'critical-success';
+
+export interface DowntimeOutcome {
+  id: DowntimeOutcomeId;
+  label: string;
+  description: string;
+  progressDelta: number;
+  effects?: Effect[];
+}
+
+export interface DowntimeResolution {
+  id: string;
+  outcomeId: DowntimeOutcomeId;
+  outcomeLabel: string;
+  roll: RollResult;
+  difficultyClass: number;
+  progressDelta: number;
+  effects?: Effect[];
+  notes?: string;
+  summary: string;
+  tone: 'info' | 'success' | 'danger';
+  timestamp: number;
+}
+
+export interface DowntimeToast {
+  id?: string;
+  title: string;
+  body: string;
+  tone: 'info' | 'success' | 'danger';
+}
+
 export interface DowntimeTask {
   id: string;
   title: string;
@@ -178,6 +215,11 @@ export interface DowntimeTask {
   completed: boolean;
   createdAt: number;
   updatedAt: number;
+  ability: Ability;
+  skill?: Skill;
+  difficultyClass: number;
+  outcomeTable: DowntimeOutcome[];
+  resolutionLog?: DowntimeResolution[];
 }
 
 export type DowntimeTaskEventType = 'created' | 'progressed' | 'completed';
@@ -187,6 +229,7 @@ export interface DowntimeTaskEventDetail {
   task: DowntimeTask;
   previousProgress?: number;
   previouslyCompleted?: boolean;
+  resolution?: DowntimeResolution;
 }
 
 export interface DowntimeTaskHistoryEntry {
@@ -194,6 +237,7 @@ export interface DowntimeTaskHistoryEntry {
   type: DowntimeTaskEventType;
   progress: number;
   notes?: string;
+  resolution?: DowntimeResolution;
 }
 
 export interface DowntimeTaskRecord extends DowntimeTask {
@@ -223,6 +267,9 @@ export interface DowntimeUpdate {
   journalEntry?: string;
   factionAdjustments?: Array<{ factionId: string; delta: number; reason?: string }>;
   buff?: DowntimeBuff | null;
+  resolution?: DowntimeResolution;
+  effects?: Effect[];
+  toasts?: DowntimeToast[];
 }
 
 export interface WorldState {

@@ -141,7 +141,27 @@ export class World implements EventTarget {
           if (!Array.isArray(record.history)) {
             record.history = [];
           } else {
-            record.history = record.history.map((entry) => ({ ...entry }));
+            record.history = record.history.map((entry) => ({
+              ...entry,
+              resolution: entry.resolution
+                ? {
+                    ...entry.resolution,
+                    effects: entry.resolution.effects
+                      ? entry.resolution.effects.map((effect) => ({ ...effect }))
+                      : undefined,
+                  }
+                : undefined,
+            }));
+          }
+          if (Array.isArray(record.resolutionLog)) {
+            record.resolutionLog = record.resolutionLog.map((resolution) => ({
+              ...resolution,
+              effects: resolution.effects
+                ? resolution.effects.map((effect) => ({ ...effect }))
+                : undefined,
+            }));
+          } else {
+            record.resolutionLog = [];
           }
           parsed.downtime.tasks[id] = { ...record };
         });
@@ -290,6 +310,7 @@ export class World implements EventTarget {
     const now = Date.now();
     const existing = this.state.downtime.tasks[update.task.id];
     const history = existing?.history ?? [];
+    const toastMessages: ToastMessage[] = [];
     const record: DowntimeTaskRecord = {
       ...update.task,
       history: [
@@ -299,6 +320,14 @@ export class World implements EventTarget {
           type: update.eventType,
           progress: update.task.progress,
           notes: update.task.notes,
+          resolution: update.resolution
+            ? {
+                ...update.resolution,
+                effects: update.resolution.effects
+                  ? update.resolution.effects.map((effect) => ({ ...effect }))
+                  : undefined,
+              }
+            : undefined,
         },
       ],
     };
@@ -325,6 +354,10 @@ export class World implements EventTarget {
       });
     }
 
+    if (update.effects && update.effects.length > 0) {
+      this.applyEffects(update.effects, toastMessages);
+    }
+
     if (typeof update.buff !== 'undefined') {
       this.state.downtime.activeBuffs = this.state.downtime.activeBuffs.filter(
         (buff) =>
@@ -335,9 +368,21 @@ export class World implements EventTarget {
       }
     }
 
+    if (update.toasts) {
+      update.toasts.forEach((toast) => {
+        toastMessages.push({
+          id: toast.id ?? `downtime-${update.task.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          title: toast.title,
+          body: toast.body,
+          tone: toast.tone,
+        });
+      });
+    }
+
     this.pruneExpiredDowntimeBuffs();
     this.persist();
     this.emit('state-change', this.snapshot);
+    toastMessages.forEach((toast) => this.emit('toast', toast));
   }
 
   async improviseNarrative(
