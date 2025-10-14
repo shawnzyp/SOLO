@@ -17,6 +17,7 @@ import {
   type JournalEntry,
   type Quest,
   type QuestStatus,
+  type RestEffect,
   type Skill,
   type StoryChoice,
   type StoryNode,
@@ -65,10 +66,20 @@ const ARCANE_STORYTELLER_CONFIG = {
   model: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_MODEL),
 };
 
+const SAFE_REST_TAGS = ['Safe Rest', 'Sanctuary', 'Camp'];
+const LONG_REST_TAGS = ['Sanctuary', 'Shelter'];
+
 interface DamageProfile {
   diceCount: number;
   diceSize: number;
   modifier: number;
+}
+
+interface ResolvedAbilityReset {
+  id: string;
+  label: string;
+  max: number;
+  refresh: 'shortRest' | 'longRest';
 }
 
 export class World implements EventTarget {
@@ -136,6 +147,9 @@ export class World implements EventTarget {
       } else {
         parsed.downtime.tasks = parsed.downtime.tasks ?? {};
         parsed.downtime.activeBuffs = parsed.downtime.activeBuffs ?? [];
+        if (typeof parsed.downtime.restingUntil !== 'number') {
+          delete parsed.downtime.restingUntil;
+        }
         Object.entries(parsed.downtime.tasks).forEach(([id, task]) => {
           const record = task as DowntimeTaskRecord;
           if (!Array.isArray(record.history)) {
@@ -274,6 +288,97 @@ export class World implements EventTarget {
     this.persist();
     this.emit('state-change', this.snapshot);
     this.emit('toast', toast);
+  }
+
+  takeRest(restType: 'short' | 'long'): void {
+    const hero = this.state.hero;
+    if (!hero) return;
+    const availability = this.getRestAvailability();
+    const allowed = restType === 'short' ? availability.canShortRest : availability.canLongRest;
+    if (!allowed) {
+      const reason = restType === 'short' ? availability.shortRestReason : availability.longRestReason;
+      if (reason) {
+        this.emit('toast', {
+          id: `rest-denied-${Date.now()}`,
+          title: 'Rest Unavailable',
+          body: reason,
+          tone: 'danger',
+        });
+      }
+      return;
+    }
+    const toastMessages: ToastMessage[] = [];
+    const effect: RestEffect =
+      restType === 'short'
+        ? {
+            type: 'shortRest',
+            hpRecovery: { kind: 'percentage', percentage: 25, minimum: 1 },
+            downtimeCost: 1,
+          }
+        : {
+            type: 'longRest',
+            hpRecovery: { kind: 'full' },
+            downtimeCost: 8,
+          };
+    this.applyEffects([effect], toastMessages);
+    if (toastMessages.length > 0) {
+      toastMessages.forEach((toast) => this.emit('toast', toast));
+    }
+    this.persist();
+    this.emit('state-change', this.snapshot);
+  }
+
+  getRestAvailability(): {
+    canShortRest: boolean;
+    canLongRest: boolean;
+    shortRestReason?: string;
+    longRestReason?: string;
+    cooldownRemainingMs: number;
+  } {
+    const hero = this.state.hero;
+    const node = this.currentNode;
+    if (!hero || !node) {
+      return {
+        canShortRest: false,
+        canLongRest: false,
+        shortRestReason: 'No hero ready to rest.',
+        longRestReason: 'No hero ready to rest.',
+        cooldownRemainingMs: 0,
+      };
+    }
+
+    const now = Date.now();
+    const restingUntil = this.state.downtime.restingUntil ?? 0;
+    const cooldownRemainingMs = Math.max(0, restingUntil - now);
+    const tags = new Set(node.tags ?? []);
+    const safe = SAFE_REST_TAGS.some((tag) => tags.has(tag));
+    const shelter = LONG_REST_TAGS.some((tag) => tags.has(tag));
+
+    let canShortRest = safe;
+    let canLongRest = shelter;
+    let shortRestReason: string | undefined;
+    let longRestReason: string | undefined;
+
+    if (!safe) {
+      shortRestReason = 'No safe resting spot is available here.';
+      canShortRest = false;
+    }
+
+    if (!shelter) {
+      longRestReason = 'A long rest requires a secure shelter.';
+      canLongRest = false;
+    }
+
+    if (cooldownRemainingMs > 0) {
+      const cooldownHours = cooldownRemainingMs / (60 * 60 * 1000);
+      const message = `Rest available in ${this.formatHours(cooldownHours)}.`;
+      shortRestReason = message;
+      longRestReason = message;
+      canShortRest = false;
+      canLongRest = false;
+    }
+
+    return { canShortRest, canLongRest, shortRestReason, longRestReason, cooldownRemainingMs };
   }
 
   addJournalEntry(text: string): void {
@@ -819,6 +924,10 @@ export class World implements EventTarget {
           }
           break;
         }
+        case 'shortRest':
+        case 'longRest':
+          this.applyRestEffect(effect, toastMessages);
+          break;
         case 'addQuest': {
           const quest: Quest = {
             ...effect.quest,
@@ -934,6 +1043,163 @@ export class World implements EventTarget {
     state.activeBuffs = state.activeBuffs.filter(
       (buff: DowntimeBuff) => !buff.expiresAt || buff.expiresAt > referenceTime,
     );
+  }
+
+  private applyRestEffect(effect: RestEffect, toastMessages: ToastMessage[]): void {
+    const hero = this.state.hero;
+    if (!hero) return;
+
+    const restLabel = effect.type === 'shortRest' ? 'Short Rest' : 'Long Rest';
+    const recoveryConfig = effect.hpRecovery ??
+      (effect.type === 'longRest'
+        ? { kind: 'full' as const }
+        : { kind: 'percentage' as const, percentage: 25, minimum: 1 });
+    const recoveredHP = this.resolveRestHealing(hero, recoveryConfig);
+    if (recoveredHP > 0) {
+      hero.currentHP = Math.min(hero.maxHP, hero.currentHP + recoveredHP);
+    }
+
+    const resets = this.resolveAbilityResets(hero, effect);
+    const resetLabels: string[] = [];
+    if (resets.length > 0) {
+      hero.classResources = { ...(hero.classResources ?? {}) };
+      resets.forEach((reset) => {
+        hero.classResources![reset.id] = {
+          id: reset.id,
+          label: reset.label,
+          max: reset.max,
+          current: reset.max,
+          refresh: reset.refresh,
+        };
+        resetLabels.push(reset.label);
+      });
+    }
+
+    const hours = this.resolveDowntimeCost(effect);
+    const now = Date.now();
+    if (hours > 0) {
+      const durationMs = hours * 60 * 60 * 1000;
+      const baseline = Math.max(now, this.state.downtime.restingUntil ?? now);
+      this.state.downtime.restingUntil = baseline + durationMs;
+      this.state.downtime.lastActivityAt = now;
+    } else {
+      this.state.downtime.lastActivityAt = now;
+    }
+
+    const summaryParts: string[] = [];
+    if (recoveredHP > 0) {
+      summaryParts.push(`Recovered ${recoveredHP} HP.`);
+    }
+    if (resetLabels.length > 0) {
+      summaryParts.push(`Recharged ${resetLabels.join(', ')}.`);
+    }
+    if (hours > 0) {
+      summaryParts.push(`Time passes (${this.formatHours(hours)}).`);
+    }
+    if (effect.narrative) {
+      summaryParts.push(effect.narrative);
+    }
+
+    const heroName = hero.name || 'The lone adventurer';
+    const baseMessage = effect.interrupted
+      ? `${heroName}'s ${restLabel.toLowerCase()} was interrupted.`
+      : `${heroName} completes a ${restLabel.toLowerCase()}.`;
+    const journalMessage = summaryParts.length > 0
+      ? `${baseMessage} ${summaryParts.join(' ')}`
+      : baseMessage;
+    this.addJournalEntry(journalMessage);
+
+    const toastBody = effect.interrupted
+      ? summaryParts.length > 0
+        ? summaryParts.join(' ')
+        : 'Interrupted before true recovery.'
+      : summaryParts.length > 0
+        ? summaryParts.join(' ')
+        : 'A moment of calm settles over the camp.';
+
+    toastMessages.push({
+      id: `rest-${Date.now()}`,
+      title: restLabel,
+      body: toastBody,
+      tone: effect.interrupted ? 'danger' : 'success',
+    });
+  }
+
+  private resolveRestHealing(hero: Hero, recovery: NonNullable<RestEffect['hpRecovery']>): number {
+    if (!recovery) return 0;
+    switch (recovery.kind) {
+      case 'flat':
+        return Math.max(0, Math.round(recovery.amount));
+      case 'percentage': {
+        const percentage = recovery.percentage > 1 ? recovery.percentage / 100 : recovery.percentage;
+        const calculated = Math.floor(hero.maxHP * Math.max(0, percentage));
+        const minimum = recovery.minimum ?? 0;
+        return Math.max(minimum, calculated);
+      }
+      case 'full':
+        return Math.max(0, hero.maxHP - hero.currentHP);
+      default:
+        return 0;
+    }
+  }
+
+  private resolveAbilityResets(hero: Hero, effect: RestEffect): ResolvedAbilityReset[] {
+    const configured = effect.abilityResets ?? [];
+    const resources = hero.classResources ?? {};
+    if (configured.length > 0) {
+      return configured
+        .filter((entry) => entry && typeof entry.id === 'string')
+        .map((entry) => {
+          const existing = resources[entry.id];
+          const refresh = entry.refresh ?? existing?.refresh ?? effect.type;
+          const max = entry.max ?? existing?.max ?? existing?.current ?? 1;
+          const label = entry.label ?? existing?.label ?? this.toTitleCase(entry.id.replace(/[-_]/g, ' '));
+          return { id: entry.id, label, max, refresh };
+        });
+    }
+
+    const resourceList = Object.values(resources);
+    if (resourceList.length === 0) {
+      return [];
+    }
+
+    if (effect.type === 'longRest') {
+      return resourceList.map((resource) => ({
+        id: resource.id,
+        label: resource.label,
+        max: resource.max,
+        refresh: resource.refresh,
+      }));
+    }
+
+    return resourceList
+      .filter((resource) => resource.refresh === 'shortRest')
+      .map((resource) => ({
+        id: resource.id,
+        label: resource.label,
+        max: resource.max,
+        refresh: resource.refresh,
+      }));
+  }
+
+  private resolveDowntimeCost(effect: RestEffect): number {
+    if (typeof effect.downtimeCost === 'number' && Number.isFinite(effect.downtimeCost)) {
+      return Math.max(0, effect.downtimeCost);
+    }
+    return effect.type === 'longRest' ? 8 : 1;
+  }
+
+  private formatHours(hours: number): string {
+    const rounded = Math.max(0, hours);
+    if (rounded === 1) {
+      return '1 hour';
+    }
+    if (rounded < 1) {
+      const minutes = Math.round(rounded * 60);
+      return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+    }
+    const display = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
+    return `${display} hours`;
   }
 }
 

@@ -359,7 +359,7 @@ export const storyNodes: StoryNode[] = [
     background:
       "linear-gradient(180deg, rgba(56,22,40,0.92), rgba(18,8,24,0.95))",
     ambient: "audio/lute-soft.mp3",
-    tags: ["Verdyn Outskirts", "Social"],
+    tags: ["Verdyn Outskirts", "Social", "Safe Rest", "Camp"],
     choices: [
       {
         id: "share-story",
@@ -410,7 +410,18 @@ export const storyNodes: StoryNode[] = [
       {
         id: "rest-by-fire",
         text: "Rest by the fire and regain composure",
-        effects: [{ type: "modifyHP", delta: 4 }],
+        effects: [
+          {
+            type: "shortRest",
+            hpRecovery: { kind: "flat", amount: 4 },
+            downtimeCost: 1,
+            narrative: "You share rations and mend gear beside the watchful caravan lanterns.",
+          },
+          {
+            type: "log",
+            entry: "Spent an hour trading road tales with caravan guards while patching wounds.",
+          },
+        ],
         toNode: "caravan-encampment",
       },
     ],
@@ -1376,6 +1387,125 @@ export const storyNodes: StoryNode[] = [
         id: "inspect-crater",
         text: "Inspect a fresh ember crater",
         toNode: "road-crater",
+      },
+      {
+        id: "seek-shelter",
+        text: "Search for a warded campsite",
+        toNode: "ember-road-camp",
+      },
+    ],
+  },
+  {
+    id: "ember-road-camp",
+    title: "Wardens' Campsite",
+    summary: "Rune-scribed stones promise a brief respite from the Ember winds.",
+    body: [
+      "A shallow hollow holds a ring of Verdyn wardstones, their sigils flickering like coals beneath a dusting of ash.",
+      "Discarded ration tins and patched bedrolls whisper of scouts who once held this ground against the wilds.",
+    ],
+    background: "linear-gradient(180deg, rgba(30,24,44,0.92), rgba(12,10,24,0.94))",
+    ambient: "audio/forest-soft.mp3",
+    tags: ["Ember Wilds", "Camp", "Safe Rest", "Shelter"],
+    choices: [
+      {
+        id: "camp-long-rest",
+        text: "Bed down within the ward circle",
+        skillCheck: {
+          ability: "wisdom",
+          skill: "survival",
+          difficultyClass: 13,
+          flavor: "You adjust the sigils and scatter salt to seal the circle.",
+          success: {
+            resultText: "The wards settle into a steady pulse that lulls you into dreamless sleep.",
+            effects: [
+              {
+                type: "longRest",
+                downtimeCost: 8,
+                narrative: "Two days of rations and lamp oil keep the wardstones steady through the night.",
+              },
+              {
+                type: "log",
+                entry: "Long rest secured beneath Verdyn wardstones, supplies carefully rationed.",
+              },
+            ],
+            nextNode: "verdyn-road",
+          },
+          failure: {
+            resultText: "A flare of Ember motes slips through a gap you missed.",
+            nextNode: "ember-road-ambush",
+          },
+        },
+      },
+      {
+        id: "camp-short-rest",
+        text: "Doze briefly beside the embers",
+        effects: [
+          {
+            type: "shortRest",
+            hpRecovery: { kind: "percentage", percentage: 35, minimum: 4 },
+            downtimeCost: 1,
+            narrative: "You sip watered wine and tighten straps before breaking camp.",
+          },
+          {
+            type: "log",
+            entry: "Short rest taken at the wardens' campsite.",
+          },
+        ],
+        toNode: "verdyn-road",
+      },
+      {
+        id: "camp-risky",
+        text: "Sleep outside the wards to save supplies",
+        effects: [
+          {
+            type: "log",
+            entry: "You spurn the wardstones and sleep under open stars, trusting luck over sigils.",
+          },
+        ],
+        toNode: "ember-road-ambush",
+      },
+      {
+        id: "camp-leave",
+        text: "Return to the road without resting",
+        toNode: "verdyn-road",
+      },
+    ],
+  },
+  {
+    id: "ember-road-ambush",
+    title: "Ember-Woken Ambush",
+    summary: "Rest shatters beneath shrieking motes and prowling scavengers.",
+    body: [
+      "Ember motes ignite your bedroll as goblin silhouettes dance along the ridgeline.",
+      "An ember-wolf's howl scatters your supplies, forcing you to grab what you can and run.",
+    ],
+    background: "linear-gradient(180deg, rgba(56,18,26,0.92), rgba(16,6,14,0.94))",
+    ambient: "audio/wind-forest.mp3",
+    tags: ["Ember Wilds"],
+    onEnter: [
+      {
+        type: "shortRest",
+        hpRecovery: { kind: "flat", amount: 0 },
+        downtimeCost: 1,
+        interrupted: true,
+        narrative: "Ember motes drive you from your bedroll before any healing can take hold.",
+      },
+      { type: "modifyHP", delta: -3 },
+      {
+        type: "log",
+        entry: "Ambushed while resting outside the wardstones—scattered supplies and singed gear.",
+      },
+    ],
+    choices: [
+      {
+        id: "ambush-fight",
+        text: "Rally and drive them away",
+        toNode: "forest-ambush",
+      },
+      {
+        id: "ambush-retreat",
+        text: "Retreat to the road and regroup",
+        toNode: "verdyn-road",
       },
     ],
   },

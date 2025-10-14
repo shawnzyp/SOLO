@@ -1,4 +1,4 @@
-import type { Hero } from './types';
+import type { ClassAbilityResource, Hero } from './types';
 import type { HeroRaceOption } from '../data/races';
 import type {
   HeroBackgroundOption,
@@ -256,6 +256,36 @@ const CLASS_HIT_POINTS: Record<string, number> = {
   warden: 14,
 };
 
+type ClassResourceTemplate = {
+  id: string;
+  label: string;
+  max: number;
+  refresh: 'shortRest' | 'longRest';
+};
+
+const CLASS_RESOURCE_TEMPLATES: Record<string, ClassResourceTemplate[]> = {
+  'blade-dancer': [
+    { id: 'blade-flourish', label: 'Blade Flourish', max: 3, refresh: 'shortRest' },
+  ],
+  'rift-mage': [
+    { id: 'rift-charge', label: 'Rift Charge', max: 4, refresh: 'longRest' },
+  ],
+  warden: [
+    { id: 'warden-surge', label: "Warden's Surge", max: 2, refresh: 'shortRest' },
+  ],
+};
+
+function buildClassResources(classId: string): Record<string, ClassAbilityResource> {
+  const templates = CLASS_RESOURCE_TEMPLATES[classId] ?? [];
+  if (!templates.length) {
+    return {};
+  }
+  return templates.reduce<Record<string, ClassAbilityResource>>((acc, template) => {
+    acc[template.id] = { ...template, current: template.max };
+    return acc;
+  }, {});
+}
+
 export function createHero(options: HeroCreationOptions): Hero {
   const heroClass = heroClasses.find((entry) => entry.id === options.classId);
   const background = heroBackgrounds.find((entry) => entry.id === options.backgroundId);
@@ -313,6 +343,7 @@ export function createHero(options: HeroCreationOptions): Hero {
   const dexModifier = Math.floor((attributes.dexterity - 10) / 2);
   const armorBonus = startingItems.some((item) => item.type === 'armor') ? 2 : 0;
   const armorClass = 10 + dexModifier + armorBonus;
+  const classResources = buildClassResources(heroClass.id);
 
   return {
     name: options.name,
@@ -329,5 +360,6 @@ export function createHero(options: HeroCreationOptions): Hero {
     armorClass,
     inventory: startingItems,
     gold: 25,
+    classResources: Object.keys(classResources).length > 0 ? classResources : undefined,
   };
 }

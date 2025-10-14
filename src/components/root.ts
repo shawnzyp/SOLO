@@ -1269,6 +1269,17 @@ export class DDRoot extends HTMLElement {
       .slice(0, 3);
   }
 
+  private nodeSupportsRest(node: StoryNode | null): boolean {
+    if (!node?.tags) return false;
+    const tags = new Set(node.tags);
+    const restTags = ['Safe Rest', 'Sanctuary', 'Camp', 'Shelter'];
+    return restTags.some((tag) => tags.has(tag));
+  }
+
+  private handleRest(restType: 'short' | 'long'): void {
+    this.world.takeRest(restType);
+  }
+
   private formatAbilityLabel(ability: keyof Hero['attributes']): string {
     return ability.charAt(0).toUpperCase() + ability.slice(1);
   }
@@ -1387,6 +1398,18 @@ export class DDRoot extends HTMLElement {
         : integrationState === 'error'
           ? `SRD sync failed: ${heroOptionsError ?? 'Unknown error.'}`
           : 'SRD content synchronized.';
+    const restAvailability = this.world.getRestAvailability();
+    const nodeSupportsRest = this.nodeSupportsRest(node);
+    const showRestControls =
+      mode === 'story' && Boolean(hero) && Boolean(node) && nodeSupportsRest;
+    let restMessage: string | null = null;
+    if (restAvailability.canShortRest && restAvailability.canLongRest) {
+      restMessage = 'Resting consumes downtime and may invite complications.';
+    } else if (!restAvailability.canShortRest && restAvailability.shortRestReason) {
+      restMessage = restAvailability.shortRestReason;
+    } else if (!restAvailability.canLongRest && restAvailability.longRestReason) {
+      restMessage = restAvailability.longRestReason;
+    }
     render(
       html`
         <style>
@@ -1410,6 +1433,75 @@ export class DDRoot extends HTMLElement {
             display: flex;
             flex-direction: column;
             gap: 1.25rem;
+          }
+
+          .rest-controls {
+            display: grid;
+            gap: 0.65rem;
+            padding: 1rem 1.2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(18, 14, 28, 0.82);
+          }
+
+          .rest-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+          }
+
+          .rest-info {
+            display: grid;
+            gap: 0.2rem;
+          }
+
+          .rest-info strong {
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+          }
+
+          .rest-info span {
+            font-size: 0.8rem;
+            color: var(--dd-muted);
+          }
+
+          .rest-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .rest-actions button {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(135deg, rgba(255, 210, 164, 0.18), rgba(255, 210, 164, 0.05));
+            color: inherit;
+            padding: 0.45rem 0.9rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+          }
+
+          .rest-actions button:hover:not([disabled]) {
+            transform: translateY(-1px);
+            border-color: rgba(240, 179, 90, 0.6);
+            background: linear-gradient(135deg, rgba(240, 179, 90, 0.3), rgba(255, 210, 164, 0.12));
+          }
+
+          .rest-actions button[disabled] {
+            cursor: not-allowed;
+            opacity: 0.6;
+          }
+
+          .rest-message {
+            margin: 0;
+            font-size: 0.78rem;
+            color: rgba(196, 232, 255, 0.75);
           }
 
           aside {
@@ -2256,6 +2348,37 @@ export class DDRoot extends HTMLElement {
         <div class="layout">
           <main>
             <div class="mode-badge">${mode === 'combat' ? 'Combat Turn' : 'Story Phase'}</div>
+            ${showRestControls
+              ? html`<section class="rest-controls">
+                  <div class="rest-header">
+                    <div class="rest-info">
+                      <strong>Make Camp</strong>
+                      <span>Recover resources while the wilds stay quiet.</span>
+                    </div>
+                    <div class="rest-actions">
+                      <button
+                        ?disabled=${!restAvailability.canShortRest}
+                        title=${restAvailability.canShortRest
+                          ? 'Spend about an hour tending wounds and meditation.'
+                          : restAvailability.shortRestReason ?? 'Short rest unavailable.'}
+                        @click=${() => this.handleRest('short')}
+                      >
+                        Short Rest
+                      </button>
+                      <button
+                        ?disabled=${!restAvailability.canLongRest}
+                        title=${restAvailability.canLongRest
+                          ? 'Take a full night of sleep to recover fully.'
+                          : restAvailability.longRestReason ?? 'Long rest unavailable.'}
+                        @click=${() => this.handleRest('long')}
+                      >
+                        Long Rest
+                      </button>
+                    </div>
+                  </div>
+                  ${restMessage ? html`<p class="rest-message">${restMessage}</p>` : null}
+                </section>`
+              : null}
             <dd-story-panel .data=${node}></dd-story-panel>
             ${mode !== 'creation'
               ? html`<dd-arcane-storyteller .data=${this.state.storyteller}></dd-arcane-storyteller>`

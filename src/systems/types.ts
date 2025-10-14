@@ -131,6 +131,15 @@ export interface Hero {
   armorClass: number;
   inventory: InventoryItem[];
   gold: number;
+  classResources?: Record<string, ClassAbilityResource>;
+}
+
+export interface ClassAbilityResource {
+  id: string;
+  label: string;
+  max: number;
+  current: number;
+  refresh: 'shortRest' | 'longRest';
 }
 
 export interface FactionStanding {
@@ -215,6 +224,7 @@ export interface DowntimeState {
   tasks: Record<string, DowntimeTaskRecord>;
   activeBuffs: DowntimeBuff[];
   lastActivityAt?: number;
+  restingUntil?: number;
 }
 
 export interface DowntimeUpdate {
@@ -250,6 +260,7 @@ export type Effect =
   | { type: 'setFaction'; factionId: string; value: number }
   | { type: 'log'; entry: string }
   | { type: 'modifyHP'; delta: number }
+  | RestEffect
   | { type: 'addQuest'; quest: Quest }
   | {
       type: 'updateQuest';
@@ -264,6 +275,36 @@ export type Effect =
   | { type: 'achievement'; achievement: Achievement }
   | { type: 'setNode'; nodeId: string }
   | { type: 'setAmbient'; track?: string };
+
+export type RestEffect = ShortRestEffect | LongRestEffect;
+
+export type RestHPRecovery =
+  | { kind: 'flat'; amount: number }
+  | { kind: 'percentage'; percentage: number; minimum?: number }
+  | { kind: 'full' };
+
+export interface RestAbilityReset {
+  id: string;
+  label?: string;
+  max?: number;
+  refresh?: 'shortRest' | 'longRest';
+}
+
+export interface RestEffectBase {
+  hpRecovery?: RestHPRecovery;
+  abilityResets?: RestAbilityReset[];
+  downtimeCost?: number;
+  interrupted?: boolean;
+  narrative?: string;
+}
+
+export interface ShortRestEffect extends RestEffectBase {
+  type: 'shortRest';
+}
+
+export interface LongRestEffect extends RestEffectBase {
+  type: 'longRest';
+}
 
 export interface SkillCheckOutcome {
   resultText: string;
