@@ -2,6 +2,7 @@ import { rollD20, type RollResult } from './dice';
 import type {
   Ability,
   Achievement,
+  ArcaneNarrativeContext,
   ArcaneNarrativeResult,
   CombatEncounter,
   Condition,
@@ -171,7 +172,51 @@ export class World implements EventTarget {
       throw new Error('Describe the scene you wish to summon.');
     }
 
-    const result = await this.storyteller.improvise(trimmedPrompt, hero, this.state.currentNodeId, options?.signal);
+    const currentNode = this.currentNode;
+    const narrativeContext: ArcaneNarrativeContext = {
+      prompt: trimmedPrompt,
+      returnNodeId: this.state.currentNodeId,
+      currentNode: currentNode
+        ? {
+            id: currentNode.id,
+            title: currentNode.title,
+            summary: currentNode.summary,
+            tags: currentNode.tags,
+            background: currentNode.background,
+            ambient: currentNode.ambient,
+            origin: currentNode.origin,
+          }
+        : null,
+      factionStandings: Object.values(this.state.factions)
+        .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+        .slice(0, 4)
+        .map((standing) => ({
+          id: standing.id,
+          name: standing.name,
+          description: standing.description,
+          value: standing.value,
+        })),
+      journalHighlights: this.state.journal
+        .slice(-3)
+        .map((entry) => ({ id: entry.id, timestamp: entry.timestamp, text: entry.text })),
+      achievements: Object.values(this.state.achievements)
+        .sort((a, b) => b.unlockedAt - a.unlockedAt)
+        .slice(0, 4)
+        .map((achievement) => ({
+          id: achievement.id,
+          title: achievement.title,
+          description: achievement.description,
+          unlockedAt: achievement.unlockedAt,
+        })),
+    };
+
+    const result = await this.storyteller.improvise(
+      trimmedPrompt,
+      hero,
+      this.state.currentNodeId,
+      narrativeContext,
+      options?.signal,
+    );
     const oracleNode = this.registerOracleNode(result.node, this.state.currentNodeId);
     this.addJournalEntry(`Arcane Storyteller conjures: ${oracleNode.title}.`);
     this.setCurrentNode(oracleNode.id);

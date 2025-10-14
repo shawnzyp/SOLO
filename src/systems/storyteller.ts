@@ -1,5 +1,12 @@
 import { fillTemplate, pickBlueprint, renderOracleChoice, type OracleTemplateContext } from '../data/oracle-blueprints';
-import { type ArcaneNarrativeResult, type Effect, type Hero, type StoryChoice, type StoryNode } from './types';
+import {
+  type ArcaneNarrativeContext,
+  type ArcaneNarrativeResult,
+  type Effect,
+  type Hero,
+  type StoryChoice,
+  type StoryNode,
+} from './types';
 
 interface StorytellerConfig {
   endpoint?: string;
@@ -85,11 +92,23 @@ export class ArcaneStorytellerEngine {
     prompt: string,
     hero: Hero | null,
     returnNodeId: string | null,
+    narrativeContext: ArcaneNarrativeContext,
     signal?: AbortSignal,
   ): Promise<ArcaneNarrativeResult> {
+    const narrativeSignals: ArcaneNarrativeContext = {
+      ...narrativeContext,
+      prompt,
+      returnNodeId,
+    };
     if (this.endpoint) {
       try {
-        const llmResult = await this.invokeEndpoint(prompt, hero, returnNodeId, signal);
+        const llmResult = await this.invokeEndpoint(
+          prompt,
+          hero,
+          returnNodeId,
+          narrativeSignals,
+          signal,
+        );
         if (llmResult) {
           return llmResult;
         }
@@ -101,13 +120,14 @@ export class ArcaneStorytellerEngine {
       }
     }
 
-    return this.generateOffline(prompt, hero, returnNodeId);
+    return this.generateOffline(prompt, hero, returnNodeId, narrativeSignals);
   }
 
   private async invokeEndpoint(
     prompt: string,
     hero: Hero | null,
     returnNodeId: string | null,
+    narrativeContext: ArcaneNarrativeContext,
     signal?: AbortSignal,
   ): Promise<ArcaneNarrativeResult | null> {
     if (typeof fetch === 'undefined') return null;
@@ -151,6 +171,7 @@ export class ArcaneStorytellerEngine {
             : null,
           returnNodeId,
           model: this.model ?? undefined,
+          context: narrativeContext,
         }),
         signal: controller.signal,
       });
@@ -309,11 +330,37 @@ export class ArcaneStorytellerEngine {
     prompt: string,
     hero: Hero | null,
     returnNodeId: string | null,
+    narrativeContext: ArcaneNarrativeContext,
   ): ArcaneNarrativeResult {
-    const { blueprint, motif } = pickBlueprint(hero, prompt);
+    const { blueprint, motif } = pickBlueprint(hero, prompt, narrativeContext);
     const heroName = hero?.name ?? 'The adventurer';
     const heroClassName = hero?.heroClass.name ?? 'wanderer';
     const heroBackgroundName = hero?.background.name ?? 'mysterious past';
+    const currentNodeTitle =
+      narrativeContext.currentNode?.title ?? 'the shifting paths of the Ember Road';
+    const currentNodeSummary =
+      narrativeContext.currentNode?.summary ?? 'uncertain omens surrounding the journey ahead';
+    const factionSnapshot = (narrativeContext.factionStandings ?? []).length
+      ? (narrativeContext.factionStandings ?? [])
+          .slice(0, 3)
+          .map(
+            (standing) =>
+              `${standing.name} (${standing.value >= 0 ? '+' : ''}${Math.round(standing.value)})`,
+          )
+          .join(', ')
+      : 'no notable faction sway';
+    const journalHighlight = (narrativeContext.journalHighlights ?? []).length
+      ? (narrativeContext.journalHighlights ?? [])
+          .slice(-2)
+          .map((entry) => entry.text)
+          .join(' / ')
+      : 'The journal awaits its next entry.';
+    const achievementHighlight = (narrativeContext.achievements ?? []).length
+      ? (narrativeContext.achievements ?? [])
+          .slice(0, 2)
+          .map((achievement) => achievement.title)
+          .join(', ')
+      : 'No great deeds etched in memory yet.';
     const context: OracleTemplateContext = {
       heroName,
       heroClassName,
@@ -322,6 +369,11 @@ export class ArcaneStorytellerEngine {
       heroBackgroundId: hero?.background.id ?? 'unknown',
       prompt,
       motif,
+      currentNodeTitle,
+      currentNodeSummary,
+      factionSnapshot,
+      journalHighlight,
+      achievementHighlight,
     };
 
     const safeReturn = returnNodeId ?? blueprint.safeReturnNode;
