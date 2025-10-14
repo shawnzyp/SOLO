@@ -1,4 +1,4 @@
-import { rollD20, type RollResult } from './dice';
+import { rollD20, rollFromNotation, type RollResult } from './dice';
 import type {
   Ability,
   Achievement,
@@ -12,6 +12,7 @@ import type {
   DowntimeUpdate,
   Effect,
   Hero,
+  InventoryItem,
   JournalEntry,
   Quest,
   QuestStatus,
@@ -62,6 +63,12 @@ const ARCANE_STORYTELLER_CONFIG = {
   apiKey: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_KEY),
   model: normalizeEnv(import.meta.env?.VITE_ARCANE_STORYTELLER_MODEL),
 };
+
+interface DamageProfile {
+  diceCount: number;
+  diceSize: number;
+  modifier: number;
+}
 
 export class World implements EventTarget {
   private readonly events = new SafeEventTarget();
@@ -169,6 +176,103 @@ export class World implements EventTarget {
     this.state.hero = hero;
     this.persist();
     this.emit('state-change', this.snapshot);
+  }
+
+  consumeItem(itemId: string): void {
+    const hero = this.state.hero;
+    if (!hero) return;
+
+    const index = hero.inventory.findIndex((entry) => entry.id === itemId);
+    if (index === -1) {
+      this.emit('toast', {
+        id: `inventory-missing-${Date.now()}`,
+        title: 'Inventory',
+        body: 'That item is no longer in your pack.',
+        tone: 'danger',
+      });
+      return;
+    }
+
+    const item = hero.inventory[index];
+    if (item.type !== 'consumable') {
+      this.emit('toast', {
+        id: `inventory-invalid-${Date.now()}`,
+        title: item.name,
+        body: 'Only consumable items can be used from the pack.',
+        tone: 'info',
+      });
+      return;
+    }
+
+    const charges = inferConsumableCharges(item);
+    if (charges.remaining <= 0) {
+      this.emit('toast', {
+        id: `inventory-empty-${Date.now()}`,
+        title: item.name,
+        body: 'The item is fully expended.',
+        tone: 'danger',
+      });
+      return;
+    }
+
+    const { attemptedHealing, healingAmount } = evaluateHealingEffect(item, hero);
+    const effects: string[] = [];
+    let tone: ToastMessage['tone'] = 'info';
+
+    if (attemptedHealing) {
+      const before = hero.currentHP;
+      hero.currentHP = Math.min(hero.maxHP, hero.currentHP + healingAmount);
+      const restored = hero.currentHP - before;
+      if (restored > 0) {
+        effects.push(`Recovered ${restored} HP.`);
+        tone = 'success';
+      } else {
+        effects.push('Already at full health.');
+      }
+    }
+
+    if (item.bonus && typeof item.bonus.value === 'number') {
+      if (item.bonus.ability) {
+        const ability = item.bonus.ability;
+        hero.attributes[ability] = (hero.attributes[ability] ?? 10) + item.bonus.value;
+        effects.push(`${formatAbilityName(ability)} +${item.bonus.value}.`);
+        tone = 'success';
+      } else {
+        hero.maxHP += item.bonus.value;
+        hero.currentHP = Math.min(hero.maxHP, hero.currentHP + item.bonus.value);
+        effects.push(`Vitality increased by ${item.bonus.value}.`);
+        tone = 'success';
+      }
+    }
+
+    const remaining = Math.max(0, charges.remaining - 1);
+    const maxCharges = typeof item.maxCharges === 'number' ? item.maxCharges : charges.max;
+
+    if (remaining > 0) {
+      const updated: InventoryItem = { ...item, charges: remaining, maxCharges };
+      hero.inventory.splice(index, 1, updated);
+      if (maxCharges > 1) {
+        effects.push(`Charges remaining: ${remaining}/${maxCharges}.`);
+      }
+    } else {
+      hero.inventory.splice(index, 1);
+      effects.push('The item is consumed.');
+    }
+
+    hero.inventory = [...hero.inventory];
+    this.addJournalEntry(`Used ${item.name}.`);
+
+    const body = effects.length > 0 ? effects.join(' ') : 'No discernible effect.';
+    const toast: ToastMessage = {
+      id: `inventory-use-${item.id}-${Date.now()}`,
+      title: item.name,
+      body,
+      tone,
+    };
+
+    this.persist();
+    this.emit('state-change', this.snapshot);
+    this.emit('toast', toast);
   }
 
   addJournalEntry(text: string): void {
@@ -809,6 +913,113 @@ export class World implements EventTarget {
       (buff: DowntimeBuff) => !buff.expiresAt || buff.expiresAt > referenceTime,
     );
   }
+}
+
+const HEALING_KEYWORDS = /(heal|restore|recover|regain|mend|soothe|potion|elixir|tonic|salve|ration|bandage|draught|remedy|antidote|balm)/i;
+
+function inferConsumableCharges(item: InventoryItem): { remaining: number; max: number } {
+  if (typeof item.charges === 'number') {
+    const maxValue =
+      typeof item.maxCharges === 'number' ? item.maxCharges : Math.max(item.charges, 1);
+    return { remaining: item.charges, max: maxValue };
+  }
+
+  if (typeof item.maxCharges === 'number') {
+    return { remaining: item.maxCharges, max: item.maxCharges };
+  }
+
+  const text = `${item.name ?? ''} ${item.description ?? ''}`;
+  const ratioMatch = text.match(/(\d+)\s*\/\s*(\d+)\s*(?:charges|uses|doses|applications)?/i);
+  if (ratioMatch) {
+    const remaining = parseInt(ratioMatch[1], 10);
+    const max = parseInt(ratioMatch[2], 10);
+    return { remaining, max };
+  }
+
+  const chargeMatch = text.match(/(\d+)\s*(?:charges|uses|doses|applications|sips|swigs|vials|bolts|shots)/i);
+  if (chargeMatch) {
+    const value = parseInt(chargeMatch[1], 10);
+    return { remaining: value, max: value };
+  }
+
+  const parenMatch = text.match(/\((\d+)\)/);
+  if (parenMatch) {
+    const value = parseInt(parenMatch[1], 10);
+    return { remaining: value, max: value };
+  }
+
+  const xMatch = text.match(/x\s*(\d+)/i);
+  if (xMatch) {
+    const value = parseInt(xMatch[1], 10);
+    return { remaining: value, max: value };
+  }
+
+  return { remaining: 1, max: 1 };
+}
+
+function evaluateHealingEffect(
+  item: InventoryItem,
+  hero: Hero,
+): { attemptedHealing: boolean; healingAmount: number } {
+  const text = `${item.name ?? ''} ${item.description ?? ''}`.trim();
+  if (!text) {
+    return { attemptedHealing: false, healingAmount: 0 };
+  }
+
+  const flatMatch = text.match(/(?:heal|restore|regain|recover|gain)\s*(\d+)\s*(?:hp|hit points?)/i);
+  if (flatMatch) {
+    const base = parseInt(flatMatch[1], 10);
+    const amount = Math.max(0, base + getAbilityModifierFromHero(hero, 'constitution'));
+    return { attemptedHealing: true, healingAmount: amount };
+  }
+
+  const hasHealingCue = HEALING_KEYWORDS.test(text);
+  if (hasHealingCue) {
+    const profile = extractDamageProfileFromText(text);
+    if (profile) {
+      const notation = formatDamageNotation({
+        diceCount: profile.diceCount,
+        diceSize: profile.diceSize,
+        modifier: profile.modifier + getAbilityModifierFromHero(hero, 'constitution'),
+      });
+      const amount = Math.max(1, rollFromNotation(notation));
+      return { attemptedHealing: true, healingAmount: amount };
+    }
+
+    const baseline = Math.max(1, 6 + getAbilityModifierFromHero(hero, 'constitution'));
+    return { attemptedHealing: true, healingAmount: baseline };
+  }
+
+  return { attemptedHealing: false, healingAmount: 0 };
+}
+
+function extractDamageProfileFromText(text: string | undefined): DamageProfile | null {
+  if (!text) return null;
+  const match = text.match(/(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
+  if (!match) return null;
+  const diceCount = parseInt(match[1], 10);
+  const diceSize = parseInt(match[2], 10);
+  const modifier = match[4] ? parseInt(match[4], 10) * (match[3] === '-' ? -1 : 1) : 0;
+  return { diceCount, diceSize, modifier };
+}
+
+function formatDamageNotation(profile: DamageProfile): string {
+  const modifier = profile.modifier;
+  const base = `${profile.diceCount}d${profile.diceSize}`;
+  if (modifier === 0) {
+    return base;
+  }
+  const sign = modifier > 0 ? '+' : '-';
+  return `${base}${sign}${Math.abs(modifier)}`;
+}
+
+function getAbilityModifierFromHero(hero: Hero, ability: Ability): number {
+  const score = hero.attributes[ability] ?? 10;
+  return Math.floor((score - 10) / 2);
+}
+
+function formatAbilityName(ability: Ability): string {
+  return ability.charAt(0).toUpperCase() + ability.slice(1);
 }
 
 function compare(left: number, operator: NonNullable<Condition['operator']>, right: number): boolean {
