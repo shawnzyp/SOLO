@@ -1,4 +1,17 @@
 import { html, render } from 'lit-html';
+import { SKILLS } from '../systems/types';
+import type { Ability, Hero, Skill } from '../systems/types';
+
+const ABILITY_LABELS: Record<Ability, string> = {
+  strength: 'Strength',
+  dexterity: 'Dexterity',
+  constitution: 'Constitution',
+  intelligence: 'Intelligence',
+  wisdom: 'Wisdom',
+  charisma: 'Charisma',
+};
+
+const SKILL_LOOKUP = new Map(SKILLS.map((skill) => [skill.id, skill] as const));
 
 type DiceMode = 'normal' | 'advantage' | 'disadvantage';
 
@@ -71,6 +84,7 @@ export class DDDiceWorkbench extends HTMLElement {
   private favorites: DiceFavorite[] = [];
   private favoriteName = '';
   private error: string | null = null;
+  private currentHero: Hero | null = null;
 
   constructor() {
     super();
@@ -79,6 +93,11 @@ export class DDDiceWorkbench extends HTMLElement {
 
   connectedCallback(): void {
     this.restoreState();
+    this.update();
+  }
+
+  set hero(value: Hero | null) {
+    this.currentHero = value ?? null;
     this.update();
   }
 
@@ -303,6 +322,114 @@ export class DDDiceWorkbench extends HTMLElement {
     this.executeRoll(favorite.notation, favorite.modifier, favorite.mode, 1, favorite.name);
   }
 
+  private getAbilityModifier(ability: Ability): number {
+    const score = this.currentHero?.attributes?.[ability];
+    const numeric = Number(score);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+    return Math.floor((numeric - 10) / 2);
+  }
+
+  private getSkillModifier(skill: Skill): number {
+    const heroValue = this.currentHero?.skills?.[skill];
+    if (typeof heroValue === 'number' && Number.isFinite(heroValue)) {
+      return heroValue;
+    }
+    const definition = SKILL_LOOKUP.get(skill);
+    if (definition) {
+      return this.getAbilityModifier(definition.ability);
+    }
+    return 0;
+  }
+
+  private isSkillTrained(skill: Skill): boolean {
+    if (!this.currentHero) return false;
+    const definition = SKILL_LOOKUP.get(skill);
+    if (!definition) return false;
+    const skillModifier = this.getSkillModifier(skill);
+    const abilityModifier = this.getAbilityModifier(definition.ability);
+    return skillModifier - abilityModifier >= 2;
+  }
+
+  private quickRollAbility(ability: Ability): void {
+    const label = ABILITY_LABELS[ability] ?? ability;
+    const modifier = this.getAbilityModifier(ability);
+    this.executeRoll('1d20', modifier, this.mode, 1, `${label} Check`);
+  }
+
+  private quickRollSkill(skill: Skill): void {
+    const definition = SKILL_LOOKUP.get(skill);
+    const label = definition?.label ?? skill;
+    const modifier = this.getSkillModifier(skill);
+    this.executeRoll('1d20', modifier, this.mode, 1, `${label} Check`);
+  }
+
+  private renderHeroQuickRolls(): unknown {
+    const hero = this.currentHero;
+    if (!hero) {
+      return null;
+    }
+
+    const abilities = (Object.keys(ABILITY_LABELS) as Ability[]).map((ability) => ({
+      ability,
+      label: ABILITY_LABELS[ability],
+      modifier: this.getAbilityModifier(ability),
+    }));
+
+    const trainedSkills = SKILLS.filter((skill) => this.isSkillTrained(skill.id)).map((skill) => ({
+      ...skill,
+      modifier: this.getSkillModifier(skill.id),
+    }));
+
+    return html`
+      <section class="hero-rolls">
+        <header>
+          <h3>${hero.name}'s Quick Rolls</h3>
+        </header>
+        <div class="quick-rolls-group">
+          <h4>Abilities</h4>
+          <div class="quick-rolls-grid">
+            ${abilities.map(
+              (entry) => html`
+                <button
+                  type="button"
+                  class="secondary quick-roll"
+                  @click=${() => this.quickRollAbility(entry.ability)}
+                >
+                  <span class="label">${entry.label}</span>
+                  <span class="modifier">${entry.modifier >= 0 ? '+' : ''}${entry.modifier}</span>
+                </button>
+              `,
+            )}
+          </div>
+        </div>
+        ${trainedSkills.length > 0
+          ? html`
+              <div class="quick-rolls-group">
+                <h4>Trained Skills</h4>
+                <div class="quick-rolls-grid">
+                  ${trainedSkills.map(
+                    (skill) => html`
+                      <button
+                        type="button"
+                        class="secondary quick-roll"
+                        @click=${() => this.quickRollSkill(skill.id)}
+                      >
+                        <span class="label">${skill.label}</span>
+                        <span class="meta">${ABILITY_LABELS[skill.ability]}</span>
+                        <span class="modifier">${skill.modifier >= 0 ? '+' : ''}${skill.modifier}</span>
+                      </button>
+                    `,
+                  )}
+                </div>
+              </div>
+            `
+          : null}
+      </section>
+    `;
+  }
+
   private clearHistory(): void {
     if (this.history.length === 0) return;
     this.history = [];
@@ -483,6 +610,65 @@ export class DDDiceWorkbench extends HTMLElement {
           button.secondary[disabled] {
             background: rgba(255, 255, 255, 0.04);
             border-color: rgba(255, 210, 164, 0.1);
+          }
+
+          .hero-rolls {
+            margin: 1.5rem 0;
+            padding: 1rem 1.1rem;
+            background: rgba(32, 24, 44, 0.7);
+            border: 1px solid rgba(255, 210, 164, 0.12);
+            border-radius: 14px;
+          }
+
+          .hero-rolls header {
+            margin-bottom: 0.75rem;
+          }
+
+          .hero-rolls h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.05em;
+          }
+
+          .hero-rolls h4 {
+            margin: 0 0 0.5rem;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.75);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+          }
+
+          .quick-rolls-group + .quick-rolls-group {
+            margin-top: 1rem;
+          }
+
+          .quick-rolls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.5rem;
+          }
+
+          .quick-roll {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.2rem;
+          }
+
+          .quick-roll .label {
+            font-weight: 600;
+            font-size: 0.9rem;
+          }
+
+          .quick-roll .meta {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          .quick-roll .modifier {
+            font-size: 0.85rem;
+            opacity: 0.85;
           }
 
           .error {
@@ -722,6 +908,7 @@ export class DDDiceWorkbench extends HTMLElement {
             <button type="submit">Save Favorite</button>
           </div>
         </form>
+        ${this.renderHeroQuickRolls()}
         <section class="favorites">
           <header>
             <h3>Quick Favorites</h3>

@@ -2275,7 +2275,7 @@ export class DDRoot extends HTMLElement {
               }}
             ></dd-character-sheet>
             <dd-combat-planner .data=${{ hero }}></dd-combat-planner>
-            <dd-dice-workbench></dd-dice-workbench>
+            <dd-dice-workbench .hero=${hero}></dd-dice-workbench>
             <dd-downtime-planner .data=${{ hero }}></dd-downtime-planner>
             <dd-node-map .data=${mapNodes}></dd-node-map>
             <dd-quest-tracker .data=${quests}></dd-quest-tracker>
