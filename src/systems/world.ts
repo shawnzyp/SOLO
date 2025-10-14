@@ -342,7 +342,7 @@ export class World implements EventTarget {
 
   async improviseNarrative(
     prompt: string,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; onStatus?: (status: string) => void },
   ): Promise<ArcaneNarrativeResult> {
     const hero = this.state.hero;
     if (!hero) {
@@ -396,7 +396,7 @@ export class World implements EventTarget {
       hero,
       this.state.currentNodeId,
       narrativeContext,
-      options?.signal,
+      options,
     );
     const oracleNode = this.registerOracleNode(result.node, this.state.currentNodeId);
     this.addJournalEntry(`Arcane Storyteller conjures: ${oracleNode.title}.`);
