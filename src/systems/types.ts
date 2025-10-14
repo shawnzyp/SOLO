@@ -67,6 +67,17 @@ export interface InventoryItem {
     ability?: Ability;
     value: number;
   };
+  /**
+   * Remaining charges for consumable items. When unset the item is treated as either
+   * exhausted or single-use depending on the context in which it is parsed.
+   */
+  charges?: number;
+  /**
+   * Maximum number of charges a consumable item can hold. This allows combat to
+   * restore context between encounters by persisting the original capacity alongside
+   * the remaining uses.
+   */
+  maxCharges?: number;
 }
 
 export interface HeroClassLoadout {

@@ -1,9 +1,10 @@
 import { html, render } from 'lit-html';
-import type { CombatSnapshot } from '../systems/combat';
+import type { CombatAction, CombatSnapshot } from '../systems/combat';
 
 export class DDCombatHud extends HTMLElement {
   private snapshot: CombatSnapshot | null = null;
   private enemyName = 'Enemy';
+  private selectedConsumableId: string | null = null;
 
   constructor() {
     super();
@@ -19,6 +20,7 @@ export class DDCombatHud extends HTMLElement {
   private update(): void {
     if (!this.shadowRoot) return;
     const snapshot = this.snapshot;
+    this.ensureConsumableSelection(snapshot);
     render(
       html`
         <style>
@@ -90,7 +92,7 @@ export class DDCombatHud extends HTMLElement {
 
           .insights {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             gap: 0.6rem;
             margin-bottom: 1rem;
           }
@@ -115,9 +117,14 @@ export class DDCombatHud extends HTMLElement {
             font-size: 1rem;
           }
 
+          .insight-card .meta {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.65);
+          }
+
           .actions {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             gap: 0.75rem;
             margin-bottom: 1rem;
           }
@@ -141,6 +148,46 @@ export class DDCombatHud extends HTMLElement {
           button:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+          }
+
+          select {
+            appearance: none;
+            padding: 0.65rem 0.75rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 210, 164, 0.18);
+            background: rgba(30, 22, 44, 0.85);
+            color: inherit;
+            font-size: 0.9rem;
+          }
+
+          select:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .item-action {
+            display: grid;
+            gap: 0.45rem;
+          }
+
+          .consumable-summary {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 1rem;
+            display: grid;
+            gap: 0.35rem;
+          }
+
+          .consumable-summary .row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+          }
+
+          .consumable-summary .row.spent {
+            opacity: 0.6;
           }
 
           .hint {
@@ -223,8 +270,17 @@ export class DDCombatHud extends HTMLElement {
                   <strong>${snapshot.heroAttackBonus >= 0 ? '+' : ''}${snapshot.heroAttackBonus}</strong>
                 </div>
                 <div class="insight-card">
-                  <span class="label">Damage Range</span>
+                  <span class="label">Weapon</span>
+                  <strong>${snapshot.heroWeaponName}</strong>
+                  <span class="meta">${snapshot.heroDamageRange.notation}</span>
+                </div>
+                <div class="insight-card">
+                  <span class="label">Damage Window</span>
                   <strong>${snapshot.heroDamageRange.min} - ${snapshot.heroDamageRange.max}</strong>
+                </div>
+                <div class="insight-card">
+                  <span class="label">Hero Armor</span>
+                  <strong>${snapshot.heroArmorClass}</strong>
                 </div>
                 <div class="insight-card">
                   <span class="label">Enemy Armor</span>
@@ -235,6 +291,20 @@ export class DDCombatHud extends HTMLElement {
                   <strong>${snapshot.fleeDifficulty}</strong>
                 </div>
               </div>
+              ${snapshot.consumables.length > 0
+                ? html`
+                    <div class="consumable-summary">
+                      ${snapshot.consumables.map(
+                        (item) => html`
+                          <div class="row ${item.remaining === 0 ? 'spent' : ''}">
+                            <span>${item.name}</span>
+                            <span>${item.remaining}/${item.max}</span>
+                          </div>
+                        `,
+                      )}
+                    </div>
+                  `
+                : html`<div class="hint">No consumables equipped.</div>`}
               <div class="actions">
                 <button @click=${() => this.queueAction('attack')} ?disabled=${snapshot.status !== 'ongoing'}>
                   Attack
@@ -242,19 +312,38 @@ export class DDCombatHud extends HTMLElement {
                 <button @click=${() => this.queueAction('defend')} ?disabled=${snapshot.status !== 'ongoing'}>
                   Defend
                 </button>
-                <button
-                  @click=${() => this.queueAction('use-item')}
-                  ?disabled=${snapshot.status !== 'ongoing' || !snapshot.potionAvailable}
-                >
-                  ${snapshot.potionAvailable ? 'Use Potion' : 'Potion Spent'}
-                </button>
+                <div class="item-action">
+                  <select
+                    @change=${(event: Event) => this.onConsumableChange(event)}
+                    ?disabled=${snapshot.consumables.length === 0}
+                    .value=${this.selectedConsumableId ?? ''}
+                  >
+                    ${snapshot.consumables.length === 0
+                      ? html`<option value="" disabled selected>None equipped</option>`
+                      : null}
+                    ${snapshot.consumables.map(
+                      (item) => html`
+                        <option value=${item.id} ?selected=${item.id === this.selectedConsumableId}>
+                          ${item.name} (${item.remaining}/${item.max})
+                        </option>
+                      `,
+                    )}
+                  </select>
+                  <button
+                    @click=${() => this.queueAction('use-item', this.selectedConsumableId ?? undefined)}
+                    ?disabled=${
+                      snapshot.status !== 'ongoing' ||
+                      !this.selectedConsumableId ||
+                      !snapshot.consumables.find((item) => item.id === this.selectedConsumableId && item.remaining > 0)
+                    }
+                  >
+                    Use Item
+                  </button>
+                </div>
                 <button @click=${() => this.queueAction('flee')} ?disabled=${snapshot.status !== 'ongoing'}>
                   Flee
                 </button>
               </div>
-              ${!snapshot.potionAvailable
-                ? html`<div class="hint">You've already used your restorative draught.</div>`
-                : null}
               <div class="log">
                 ${snapshot.logs.map(
                   (entry) => html`<div class="log-entry ${entry.tone}">${entry.text}</div>`,
@@ -267,10 +356,31 @@ export class DDCombatHud extends HTMLElement {
     );
   }
 
-  private queueAction(action: string): void {
+  private ensureConsumableSelection(snapshot: CombatSnapshot | null): void {
+    if (!snapshot) {
+      this.selectedConsumableId = null;
+      return;
+    }
+    const available = snapshot.consumables.filter((entry) => entry.remaining > 0);
+    if (available.length === 0) {
+      this.selectedConsumableId = null;
+      return;
+    }
+    if (!this.selectedConsumableId || !available.some((entry) => entry.id === this.selectedConsumableId)) {
+      this.selectedConsumableId = available[0].id;
+    }
+  }
+
+  private onConsumableChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.selectedConsumableId = select.value || null;
+    this.update();
+  }
+
+  private queueAction(action: CombatAction, itemId?: string): void {
     this.dispatchEvent(
       new CustomEvent('combat-action', {
-        detail: { action },
+        detail: { action, itemId },
         bubbles: true,
         composed: true,
       }),
