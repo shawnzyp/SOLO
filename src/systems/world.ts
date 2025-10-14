@@ -6,6 +6,10 @@ import type {
   ArcaneNarrativeResult,
   CombatEncounter,
   Condition,
+  DowntimeBuff,
+  DowntimeState,
+  DowntimeTaskRecord,
+  DowntimeUpdate,
   Effect,
   Hero,
   JournalEntry,
@@ -71,6 +75,7 @@ export class World implements EventTarget {
     ambientTrack: undefined,
     discoveredNodes: {},
     oracleScenes: {},
+    downtime: { tasks: {}, activeBuffs: [] },
   };
   private storyteller = new ArcaneStorytellerEngine({
     endpoint: ARCANE_STORYTELLER_CONFIG.endpoint ?? undefined,
@@ -118,7 +123,23 @@ export class World implements EventTarget {
       if (!parsed.oracleScenes) {
         parsed.oracleScenes = {};
       }
+      if (!parsed.downtime) {
+        parsed.downtime = { tasks: {}, activeBuffs: [] };
+      } else {
+        parsed.downtime.tasks = parsed.downtime.tasks ?? {};
+        parsed.downtime.activeBuffs = parsed.downtime.activeBuffs ?? [];
+        Object.entries(parsed.downtime.tasks).forEach(([id, task]) => {
+          const record = task as DowntimeTaskRecord;
+          if (!Array.isArray(record.history)) {
+            record.history = [];
+          } else {
+            record.history = record.history.map((entry) => ({ ...entry }));
+          }
+          parsed.downtime.tasks[id] = { ...record };
+        });
+      }
       this.state = parsed;
+      this.pruneExpiredDowntimeBuffs();
       this.restoreOracleScenes(parsed.oracleScenes);
       this.emit('state-change', this.snapshot);
     } catch (error) {
@@ -135,6 +156,7 @@ export class World implements EventTarget {
     this.state.ambientTrack = undefined;
     this.state.discoveredNodes = {};
     this.state.oracleScenes = {};
+    this.state.downtime = { tasks: {}, activeBuffs: [] };
     resetDynamicNodes();
     this.state.currentNodeId = null;
     this.addJournalEntry(
@@ -157,6 +179,60 @@ export class World implements EventTarget {
     };
     this.state.journal = [...this.state.journal, entry];
     this.emit('journal-entry', entry);
+  }
+
+  applyDowntimeUpdate(update: DowntimeUpdate): void {
+    const now = Date.now();
+    const existing = this.state.downtime.tasks[update.task.id];
+    const history = existing?.history ?? [];
+    const record: DowntimeTaskRecord = {
+      ...update.task,
+      history: [
+        ...history,
+        {
+          timestamp: now,
+          type: update.eventType,
+          progress: update.task.progress,
+          notes: update.task.notes,
+        },
+      ],
+    };
+    this.state.downtime.tasks[record.id] = record;
+    this.state.downtime.lastActivityAt = now;
+
+    if (update.journalEntry) {
+      this.addJournalEntry(update.journalEntry);
+    }
+
+    if (update.factionAdjustments) {
+      update.factionAdjustments.forEach((adjustment) => {
+        if (!adjustment || !adjustment.delta) return;
+        const faction = this.state.factions[adjustment.factionId];
+        if (!faction) return;
+        faction.value += adjustment.delta;
+        if (adjustment.reason) {
+          this.addJournalEntry(adjustment.reason);
+        } else {
+          this.addJournalEntry(
+            `${faction.name} reputation ${adjustment.delta >= 0 ? 'increased' : 'decreased'} to ${faction.value}.`,
+          );
+        }
+      });
+    }
+
+    if (typeof update.buff !== 'undefined') {
+      this.state.downtime.activeBuffs = this.state.downtime.activeBuffs.filter(
+        (buff) =>
+          (update.buff ? buff.id !== update.buff.id : true) && buff.sourceTaskId !== update.task.id,
+      );
+      if (update.buff) {
+        this.state.downtime.activeBuffs = [...this.state.downtime.activeBuffs, update.buff];
+      }
+    }
+
+    this.pruneExpiredDowntimeBuffs();
+    this.persist();
+    this.emit('state-change', this.snapshot);
   }
 
   async improviseNarrative(
@@ -723,7 +799,15 @@ export class World implements EventTarget {
 
   private persist(): void {
     if (typeof window === 'undefined') return;
+    this.pruneExpiredDowntimeBuffs();
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+  }
+
+  private pruneExpiredDowntimeBuffs(state: DowntimeState = this.state.downtime, referenceTime = Date.now()): void {
+    if (!state?.activeBuffs) return;
+    state.activeBuffs = state.activeBuffs.filter(
+      (buff: DowntimeBuff) => !buff.expiresAt || buff.expiresAt > referenceTime,
+    );
   }
 }
 
