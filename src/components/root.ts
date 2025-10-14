@@ -66,7 +66,14 @@ const INITIAL_HERO_OPTIONS: HeroOptionSnapshot = {
   backgrounds: listHeroBackgrounds(),
 };
 
-type RenderChoice = StoryChoice & { disabled?: boolean };
+type SkillCheckMeta = {
+  modifier: number;
+  successChance: number;
+  successPercent: number;
+  accessibilityLabel: string;
+};
+
+type RenderChoice = StoryChoice & { disabled?: boolean; skillCheckMeta?: SkillCheckMeta };
 
 type MapNode = DiscoveredNode & { isCurrent: boolean };
 
@@ -166,6 +173,19 @@ function createEmptyCompendiumIndex(): Record<SrdCompendiumCategory, SrdCompendi
     },
     {} as Record<SrdCompendiumCategory, SrdCompendiumEntrySummary[]>,
   );
+}
+
+function calculateSkillCheckSuccessChance(difficultyClass: number, modifier: number): number {
+  const requiredRoll = difficultyClass - modifier;
+  if (requiredRoll <= 1) {
+    return 1;
+  }
+  const minimumRoll = Math.ceil(requiredRoll);
+  if (minimumRoll > 20) {
+    return 1 / 20;
+  }
+  const successfulOutcomes = 21 - minimumRoll;
+  return Math.max(0, Math.min(1, successfulOutcomes / 20));
 }
 
 function normalizeHeroCreation(
@@ -645,10 +665,29 @@ export class DDRoot extends HTMLElement {
     if (!node) return [];
     return node.choices
       .filter((choice) => !choice.hidden)
-      .map((choice) => ({
-        ...choice,
-        disabled: choice.requirements ? !this.world.checkConditions(choice.requirements) : false,
-      }));
+      .map((choice) => {
+        const disabled = choice.requirements ? !this.world.checkConditions(choice.requirements) : false;
+        let skillCheckMeta: SkillCheckMeta | undefined;
+        if (choice.skillCheck) {
+          const modifier = this.world.getModifier(choice.skillCheck.ability);
+          const successChance = calculateSkillCheckSuccessChance(
+            choice.skillCheck.difficultyClass,
+            modifier,
+          );
+          const successPercent = Math.round(successChance * 100);
+          skillCheckMeta = {
+            modifier,
+            successChance,
+            successPercent,
+            accessibilityLabel: `Estimated ${successPercent}% chance of success`,
+          };
+        }
+        return {
+          ...choice,
+          disabled,
+          skillCheckMeta,
+        };
+      });
   }
 
   private handleHeroCreationInput(event: Event): void {
