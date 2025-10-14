@@ -313,6 +313,7 @@ interface RootState {
   compendiumLoading: boolean;
   compendiumError: string | null;
   storyteller: ArcaneStorytellerPanelState;
+  activePanel: 'story' | 'hero' | 'tools' | 'lore';
 }
 
 export class DDRoot extends HTMLElement {
@@ -346,6 +347,7 @@ export class DDRoot extends HTMLElement {
     compendiumLoading: false,
     compendiumError: null,
     storyteller: { ...DEFAULT_STORYTELLER_STATE },
+    activePanel: 'story',
   };
 
   private combatSession: CombatSession | null = null;
@@ -1307,6 +1309,14 @@ export class DDRoot extends HTMLElement {
       .join(' ');
   }
 
+  private setActivePanel(panel: RootState['activePanel']): void {
+    if (this.state.activePanel === panel) {
+      return;
+    }
+    this.state = { ...this.state, activePanel: panel };
+    this.requestRender();
+  }
+
   private requestRender(): void {
     if (!this.shadowRoot) return;
     const {
@@ -1328,6 +1338,7 @@ export class DDRoot extends HTMLElement {
       compendium,
       compendiumLoading,
       compendiumError,
+      activePanel,
     } = this.state;
     const normalizedCreation = this.getNormalizedHeroCreation();
     const heroRaces = heroOptions.races;
@@ -1405,35 +1416,316 @@ export class DDRoot extends HTMLElement {
         : integrationState === 'error'
           ? `SRD sync failed: ${heroOptionsError ?? 'Unknown error.'}`
           : 'SRD content synchronized.';
+    const heroPortrait =
+      hero?.portrait && hero.portrait.trim().length > 0 ? hero.portrait : DEFAULT_HERO_PORTRAIT;
+    const heroPortraitUrl = encodeURI(heroPortrait);
+    const heroNameDisplay = hero?.name ?? DEFAULT_HERO_NAME;
+    const heroClassName = hero?.heroClass?.name ?? 'Classless Wanderer';
+    const heroLevelLabel = hero ? `Level ${hero.level} ${heroClassName}` : 'Awaiting your legend';
+    const heroRaceLabel =
+      hero?.race && hero.race.trim().length > 0 ? this.toTitleCase(hero.race) : 'Unknown origin';
+    const heroBackgroundLabel = hero?.background?.name ?? 'No background selected';
+    const heroOriginLabel = hero
+      ? `${heroRaceLabel} • ${heroBackgroundLabel}`
+      : 'Choose a race and background to define your story.';
+    const heroHpDisplay = hero ? `${hero.currentHP}/${hero.maxHP}` : '—';
+    const heroAcDisplay = hero?.armorClass != null ? String(hero.armorClass) : '—';
+    const heroGoldDisplay = hero?.gold != null ? `${hero.gold} gp` : '—';
+    const heroSkillChipData = (hero ? this.previewTopSkills(hero) : []).map((entry) => ({
+      label: entry.label,
+      display: entry.value >= 0 ? `+${entry.value}` : `${entry.value}`,
+    }));
+    const modeChipLabel =
+      mode === 'combat' ? 'Combat Turn' : mode === 'creation' ? 'Create Hero' : 'Story Phase';
+    const modeChipClass = mode;
+    const storyContent = html`
+      <dd-story-panel .data=${node}></dd-story-panel>
+      ${mode !== 'creation'
+        ? html`<dd-arcane-storyteller .data=${this.state.storyteller}></dd-arcane-storyteller>`
+        : null}
+      ${mode === 'combat' && combat.encounter && combat.snapshot
+        ? html`<dd-combat-hud
+            .data=${{ snapshot: combat.snapshot, enemyName: combat.encounter.enemy.name }}
+          ></dd-combat-hud>`
+        : html`<dd-dialogue-list .data=${choices}></dd-dialogue-list>`}
+    `;
+    const heroContent = html`
+      <dd-character-sheet
+        .data=${{
+          hero,
+          factions,
+          achievements,
+        }}
+      ></dd-character-sheet>
+      <dd-quest-tracker .data=${quests}></dd-quest-tracker>
+    `;
+    const toolsContent = html`
+      <dd-combat-planner .data=${{ hero }}></dd-combat-planner>
+      <dd-dice-workbench .hero=${hero}></dd-dice-workbench>
+      <dd-downtime-planner .data=${{ hero }}></dd-downtime-planner>
+    `;
+    const loreContent = html`
+      <dd-node-map .data=${mapNodes}></dd-node-map>
+      <dd-journal-log .data=${journal}></dd-journal-log>
+      <dd-dnd-compendium .data=${compendiumData}></dd-dnd-compendium>
+    `;
+    const tabDefinitions: Array<{ id: RootState['activePanel']; label: string; icon: string }> = [
+      { id: 'story', label: 'Story', icon: '📖' },
+      { id: 'hero', label: 'Hero', icon: '🛡️' },
+      { id: 'tools', label: 'Tools', icon: '🛠️' },
+      { id: 'lore', label: 'Lore', icon: '🗺️' },
+    ];
     render(
       html`
         <style>
           :host {
             display: block;
-            min-height: 100vh;
-            padding: 2rem 3rem;
+            min-height: 100dvh;
+            padding: 1.25rem 1rem 5.5rem;
             color: var(--dd-text);
             position: relative;
-            width: min(1200px, 100%);
+            width: min(540px, 100%);
             margin: 0 auto;
           }
 
-          .layout {
+          .mobile-app {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            min-height: calc(100dvh - 2.5rem);
+          }
+
+          .app-header {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .mode-chip {
+            align-self: flex-start;
+            font-size: 0.75rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            padding: 0.4rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(240, 179, 90, 0.16);
+            color: rgba(240, 179, 90, 0.95);
+          }
+
+          .mode-chip.combat {
+            background: rgba(242, 125, 114, 0.2);
+            color: rgba(255, 184, 176, 0.95);
+          }
+
+          .mode-chip.creation {
+            background: rgba(106, 192, 255, 0.18);
+            color: rgba(106, 192, 255, 0.92);
+          }
+
+          .hero-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1.25rem;
+            border-radius: 20px;
+            background: rgba(24, 18, 36, 0.9);
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+          }
+
+          .hero-card__identity {
             display: grid;
-            grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
-            gap: 1.75rem;
+            grid-template-columns: auto 1fr;
+            gap: 1rem;
+            align-items: center;
           }
 
-          main {
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
+          .hero-card__portrait {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            border: 2px solid rgba(240, 179, 90, 0.6);
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
           }
 
-          aside {
+          .hero-card__name {
+            margin: 0;
+            font-family: 'Cinzel', serif;
+            font-size: 1.4rem;
+            letter-spacing: 0.06em;
+          }
+
+          .hero-card__meta {
+            margin: 0.25rem 0 0;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.78);
+          }
+
+          .hero-card__meta--sub {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
+          }
+
+          .hero-card__meta--muted {
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 0.8rem;
+            margin: 0;
+          }
+
+          .hero-card__stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 0.75rem;
+          }
+
+          .stat-pill {
+            display: grid;
+            gap: 0.15rem;
+            padding: 0.65rem 0.75rem;
+            border-radius: 14px;
+            background: rgba(10, 6, 18, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            text-align: center;
+          }
+
+          .stat-pill span {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          .stat-pill strong {
+            font-size: 1.1rem;
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.04em;
+          }
+
+          .hero-card__skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .skill-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(106, 192, 255, 0.18);
+            color: rgba(106, 192, 255, 0.92);
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+          }
+
+          .skill-chip strong {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.92);
+          }
+
+          .screen {
+            flex: 1;
+            display: grid;
+          }
+
+          .screen > .panel-stack {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 1rem;
+            width: 100%;
+          }
+
+          .tab-bar {
+            position: sticky;
+            bottom: 0.75rem;
+            left: 0;
+            right: 0;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 999px;
+            background: rgba(10, 6, 18, 0.9);
+            border: 1px solid rgba(255, 210, 164, 0.18);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(12px);
+            margin-top: auto;
+            z-index: 20;
+          }
+
+          .tab-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.2rem;
+            padding: 0.6rem 0.4rem;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.72);
+            font: inherit;
+            cursor: pointer;
+            transition: background 150ms ease, color 150ms ease;
+          }
+
+          .tab-button .icon {
+            font-size: 1.2rem;
+          }
+
+          .tab-button span {
+            font-size: 0.65rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+          }
+
+          .tab-button.active {
+            background: rgba(240, 179, 90, 0.16);
+            color: rgba(240, 179, 90, 0.95);
+            box-shadow: inset 0 0 0 1px rgba(240, 179, 90, 0.35);
+          }
+
+          .tab-button:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(106, 192, 255, 0.25);
+          }
+
+          @media (min-width: 600px) {
+            :host {
+              padding: 2rem 1.5rem 5.5rem;
+              width: min(600px, 100%);
+            }
+
+            .hero-card__portrait {
+              width: 84px;
+              height: 84px;
+            }
+          }
+
+          @media (min-width: 960px) {
+            :host {
+              width: min(720px, 100%);
+            }
+          }
+
+          @media (max-width: 640px) {
+            :host {
+              padding: 1rem 0.75rem 5rem;
+            }
+
+            .hero-card {
+              padding: 1rem;
+            }
+
+            .hero-card__identity {
+              gap: 0.75rem;
+            }
+
+            .tab-bar {
+              bottom: 0.5rem;
+            }
           }
 
           .creation-overlay {
@@ -1994,13 +2286,6 @@ export class DDRoot extends HTMLElement {
             transform: translateX(4px);
           }
 
-          .mode-badge {
-            font-size: 0.85rem;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--dd-muted);
-          }
-
           .preview-panel {
             background: rgba(18, 14, 28, 0.85);
             border: 1px solid rgba(255, 210, 164, 0.18);
@@ -2219,33 +2504,7 @@ export class DDRoot extends HTMLElement {
             text-align: center;
           }
 
-          @media (max-width: 1200px) {
-            :host {
-              padding: 2rem 2.5rem;
-            }
-          }
-
-          @media (max-width: 960px) {
-            :host {
-              padding: 1.75rem 1.5rem 3rem;
-            }
-
-            .layout {
-              grid-template-columns: 1fr;
-              gap: 1.5rem;
-            }
-
-            main,
-            aside {
-              order: initial;
-            }
-          }
-
           @media (max-width: 768px) {
-            :host {
-              padding: 1.5rem 1rem 2.5rem;
-            }
-
             .creation-overlay {
               align-items: flex-start;
               padding: 1.5rem 1rem;
@@ -2253,6 +2512,7 @@ export class DDRoot extends HTMLElement {
 
             .creation-panel {
               padding: 1.75rem;
+              border-radius: 20px;
             }
 
             .creation-content {
@@ -2261,45 +2521,115 @@ export class DDRoot extends HTMLElement {
             }
           }
 
-          @media (max-width: 520px) {
-            :host {
-              padding: 1.25rem 0.75rem 2rem;
-            }
-
+          @media (max-width: 540px) {
             .creation-panel {
               padding: 1.5rem;
             }
           }
         </style>
-        <div class="layout">
-          <main>
-            <div class="mode-badge">${mode === 'combat' ? 'Combat Turn' : 'Story Phase'}</div>
-            <dd-story-panel .data=${node}></dd-story-panel>
-            ${mode !== 'creation'
-              ? html`<dd-arcane-storyteller .data=${this.state.storyteller}></dd-arcane-storyteller>`
-              : null}
-            ${mode === 'combat' && combat.encounter && combat.snapshot
-              ? html`<dd-combat-hud
-                  .data=${{ snapshot: combat.snapshot, enemyName: combat.encounter.enemy.name }}
-                ></dd-combat-hud>`
-              : html`<dd-dialogue-list .data=${choices}></dd-dialogue-list>`}
-          </main>
-          <aside>
-            <dd-character-sheet
-              .data=${{
-                hero,
-                factions,
-                achievements,
-              }}
-            ></dd-character-sheet>
-            <dd-combat-planner .data=${{ hero }}></dd-combat-planner>
-            <dd-dice-workbench .hero=${hero}></dd-dice-workbench>
-            <dd-downtime-planner .data=${{ hero }}></dd-downtime-planner>
-            <dd-node-map .data=${mapNodes}></dd-node-map>
-            <dd-quest-tracker .data=${quests}></dd-quest-tracker>
-            <dd-journal-log .data=${journal}></dd-journal-log>
-            <dd-dnd-compendium .data=${compendiumData}></dd-dnd-compendium>
-          </aside>
+        <div class="mobile-app">
+          <header class="app-header">
+            <span class="mode-chip ${modeChipClass}">${modeChipLabel}</span>
+            <div class="hero-card">
+              <div class="hero-card__identity">
+                <div
+                  class="hero-card__portrait"
+                  style=${`background-image: url("${heroPortraitUrl}")`}
+                  aria-hidden="true"
+                ></div>
+                <div>
+                  <h1 class="hero-card__name">${heroNameDisplay}</h1>
+                  <p class="hero-card__meta">${heroLevelLabel}</p>
+                  <p class="hero-card__meta hero-card__meta--sub">${heroOriginLabel}</p>
+                </div>
+              </div>
+              <div class="hero-card__stats">
+                <div class="stat-pill">
+                  <span>HP</span>
+                  <strong>${heroHpDisplay}</strong>
+                </div>
+                <div class="stat-pill">
+                  <span>AC</span>
+                  <strong>${heroAcDisplay}</strong>
+                </div>
+                <div class="stat-pill">
+                  <span>Gold</span>
+                  <strong>${heroGoldDisplay}</strong>
+                </div>
+              </div>
+              ${heroSkillChipData.length > 0
+                ? html`<div class="hero-card__skills">
+                    ${heroSkillChipData.map(
+                      (skill) => html`<span class="skill-chip">
+                          ${skill.label}
+                          <strong>${skill.display}</strong>
+                        </span>`,
+                    )}
+                  </div>`
+                : html`<p class="hero-card__meta hero-card__meta--muted">
+                    ${hero
+                      ? 'Top proficiencies will appear here as your legend grows.'
+                      : 'Complete hero creation to reveal your heroic proficiencies.'}
+                  </p>`}
+            </div>
+          </header>
+          <section class="screen" aria-live="polite">
+            <div
+              class="panel-stack"
+              id="panel-story"
+              role="tabpanel"
+              aria-labelledby="tab-story"
+              ?hidden=${activePanel !== 'story'}
+            >
+              ${storyContent}
+            </div>
+            <div
+              class="panel-stack"
+              id="panel-hero"
+              role="tabpanel"
+              aria-labelledby="tab-hero"
+              ?hidden=${activePanel !== 'hero'}
+            >
+              ${heroContent}
+            </div>
+            <div
+              class="panel-stack"
+              id="panel-tools"
+              role="tabpanel"
+              aria-labelledby="tab-tools"
+              ?hidden=${activePanel !== 'tools'}
+            >
+              ${toolsContent}
+            </div>
+            <div
+              class="panel-stack"
+              id="panel-lore"
+              role="tabpanel"
+              aria-labelledby="tab-lore"
+              ?hidden=${activePanel !== 'lore'}
+            >
+              ${loreContent}
+            </div>
+          </section>
+          <nav class="tab-bar" role="tablist" aria-label="Primary navigation">
+            ${tabDefinitions.map(
+              (tab) => html`
+                <button
+                  id=${`tab-${tab.id}`}
+                  class="tab-button ${activePanel === tab.id ? 'active' : ''}"
+                  type="button"
+                  role="tab"
+                  aria-selected=${activePanel === tab.id ? 'true' : 'false'}
+                  aria-controls=${`panel-${tab.id}`}
+                  tabindex=${activePanel === tab.id ? '0' : '-1'}
+                  @click=${() => this.setActivePanel(tab.id)}
+                >
+                  <span class="icon" aria-hidden="true">${tab.icon}</span>
+                  <span>${tab.label}</span>
+                </button>
+              `,
+            )}
+          </nav>
         </div>
         <dd-toast-stack .data=${toasts}></dd-toast-stack>
         ${mode === 'creation'
