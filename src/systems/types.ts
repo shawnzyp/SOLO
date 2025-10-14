@@ -273,6 +273,7 @@ export interface SkillCheckOutcome {
 
 export interface SkillCheck {
   ability: Ability;
+  skill?: Skill;
   difficultyClass: number;
   success: SkillCheckOutcome;
   failure: SkillCheckOutcome;

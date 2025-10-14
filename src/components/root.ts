@@ -892,17 +892,24 @@ export class DDRoot extends HTMLElement {
         const disabled = choice.requirements ? !this.world.checkConditions(choice.requirements) : false;
         let skillCheckMeta: SkillCheckMeta | undefined;
         if (choice.skillCheck) {
-          const modifier = this.world.getModifier(choice.skillCheck.ability);
+          const modifier = this.world.getModifier(
+            choice.skillCheck.ability,
+            choice.skillCheck.skill,
+          );
           const successChance = calculateSkillCheckSuccessChance(
             choice.skillCheck.difficultyClass,
             modifier,
           );
           const successPercent = Math.round(successChance * 100);
+          const label = this.describeSkillCheckLabel(
+            choice.skillCheck.ability,
+            choice.skillCheck.skill,
+          );
           skillCheckMeta = {
             modifier,
             successChance,
             successPercent,
-            accessibilityLabel: `Estimated ${successPercent}% chance of success`,
+            accessibilityLabel: `Estimated ${successPercent}% chance of success on a ${label} check`,
           };
         }
         return {
@@ -1264,6 +1271,22 @@ export class DDRoot extends HTMLElement {
 
   private formatAbilityLabel(ability: keyof Hero['attributes']): string {
     return ability.charAt(0).toUpperCase() + ability.slice(1);
+  }
+
+  private describeSkillCheckLabel(ability: Ability, skill?: Skill): string {
+    const abilityLabel = this.toTitleCase(ability);
+    if (!skill) {
+      return abilityLabel;
+    }
+    const skillLabel = SKILLS.find((definition) => definition.id === skill)?.label;
+    return `${abilityLabel} (${skillLabel ?? this.toTitleCase(skill)})`;
+  }
+
+  private toTitleCase(value: string): string {
+    return value
+      .split(/[-_]/)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
   }
 
   private requestRender(): void {

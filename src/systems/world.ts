@@ -1,27 +1,28 @@
 import { rollD20, rollFromNotation, type RollResult } from './dice';
-import type {
-  Ability,
-  Achievement,
-  ArcaneNarrativeContext,
-  ArcaneNarrativeResult,
-  CombatEncounter,
-  Condition,
-  DowntimeBuff,
-  DowntimeState,
-  DowntimeTaskRecord,
-  DowntimeUpdate,
-  Effect,
-  Hero,
-  InventoryItem,
-  JournalEntry,
-  Quest,
-  QuestStatus,
-  Skill,
-  StoryChoice,
-  StoryNode,
-  WorldState,
-  DiscoveredNode,
-  OracleSceneRecord,
+import {
+  SKILLS,
+  type Ability,
+  type Achievement,
+  type ArcaneNarrativeContext,
+  type ArcaneNarrativeResult,
+  type CombatEncounter,
+  type Condition,
+  type DowntimeBuff,
+  type DowntimeState,
+  type DowntimeTaskRecord,
+  type DowntimeUpdate,
+  type Effect,
+  type Hero,
+  type InventoryItem,
+  type JournalEntry,
+  type Quest,
+  type QuestStatus,
+  type Skill,
+  type StoryChoice,
+  type StoryNode,
+  type WorldState,
+  type DiscoveredNode,
+  type OracleSceneRecord,
 } from './types';
 import { storyNodes, getNodeById, registerDynamicNode, resetDynamicNodes } from '../data/story';
 import { ArcaneStorytellerEngine } from './storyteller';
@@ -415,7 +416,11 @@ export class World implements EventTarget {
     let combat: CombatEncounter | null = null;
 
     if (choice.skillCheck) {
-      const modifier = this.getModifier(choice.skillCheck.ability);
+      const modifier = this.getModifier(choice.skillCheck.ability, choice.skillCheck.skill);
+      const checkLabel = this.formatSkillCheckLabel(
+        choice.skillCheck.ability,
+        choice.skillCheck.skill,
+      );
       rollResult = rollD20(modifier);
       const passed =
         rollResult.isCriticalSuccess || rollResult.total >= choice.skillCheck.difficultyClass;
@@ -430,7 +435,7 @@ export class World implements EventTarget {
             ? 'Success'
             : 'Failure';
       this.addJournalEntry(
-        `${choice.skillCheck.ability.toUpperCase()} check ${rollDescriptor}: ` +
+        `${checkLabel} check ${rollDescriptor}: ` +
           `Rolled ${rollResult.roll}${modifierLabel} = ${rollResult.total} vs DC ${choice.skillCheck.difficultyClass}.`,
       );
       if (outcome.effects) {
@@ -441,7 +446,7 @@ export class World implements EventTarget {
       }
       toastMessages.push({
         id: `skill-${choice.id}`,
-        title: `${choice.skillCheck.ability.toUpperCase()} Check`,
+        title: `${checkLabel} Check`,
         body: `Rolled ${rollResult.total} (${rollResult.roll}${modifier >= 0 ? '+' : ''}${modifier}).`,
         tone: passed ? 'success' : 'danger',
       });
@@ -583,7 +588,24 @@ export class World implements EventTarget {
     const abilityScore = hero.attributes[ability];
     const abilityModifier = Math.floor((abilityScore - 10) / 2);
     if (!skill) return abilityModifier;
-    return abilityModifier + (hero.skills[skill] ?? 0);
+    const skillBonus = hero.skills[skill];
+    return typeof skillBonus === 'number' ? skillBonus : abilityModifier;
+  }
+
+  private formatSkillCheckLabel(ability: Ability, skill?: Skill): string {
+    const abilityLabel = this.toTitleCase(ability);
+    if (!skill) {
+      return abilityLabel;
+    }
+    const skillLabel = SKILLS.find((definition) => definition.id === skill)?.label;
+    return `${abilityLabel} (${skillLabel ?? this.toTitleCase(skill)})`;
+  }
+
+  private toTitleCase(value: string): string {
+    return value
+      .split(/[-_]/)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
   }
 
   private evaluateCondition(condition: Condition): boolean {
