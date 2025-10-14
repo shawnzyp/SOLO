@@ -174,6 +174,18 @@ export class DDDialogueList extends HTMLElement {
               choice.skillCheckMeta && typeof choice.skillCheckMeta.modifier === 'number'
                 ? `${choice.skillCheckMeta.modifier >= 0 ? '+' : ''}${choice.skillCheckMeta.modifier}`
                 : null;
+            const abilityLabel = choice.skillCheck
+              ? this.toTitle(choice.skillCheck.ability)
+              : null;
+            const skillLabel =
+              choice.skillCheck && choice.skillCheck.skill
+                ? this.toTitle(choice.skillCheck.skill)
+                : null;
+            const checkLabel = abilityLabel
+              ? skillLabel
+                ? `${abilityLabel} (${skillLabel})`
+                : abilityLabel
+              : null;
             return html`
               <li>
                 <button
@@ -189,7 +201,7 @@ export class DDDialogueList extends HTMLElement {
                   ${choice.skillCheck
                     ? html`<div class="meta">
                         <span class="check-summary">
-                          ${choice.skillCheck.ability.toUpperCase()} Check · DC
+                          ${checkLabel ?? 'Skill'} Check · DC
                           ${choice.skillCheck.difficultyClass}
                           ${choice.skillCheck.flavor ? html`· ${choice.skillCheck.flavor}` : null}
                         </span>

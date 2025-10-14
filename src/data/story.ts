@@ -222,6 +222,7 @@ export const storyNodes: StoryNode[] = [
         text: "Help Guard Jaryn lift the wagon axle",
         skillCheck: {
           ability: "strength",
+          skill: "athletics",
           difficultyClass: 12,
           flavor: "You brace beside the guard, muscles straining against stubborn wood.",
           success: {
@@ -299,6 +300,7 @@ export const storyNodes: StoryNode[] = [
         text: "Seek a vision of the Ember Rift",
         skillCheck: {
           ability: "wisdom",
+          skill: "insight",
           difficultyClass: 13,
           flavor: "You steady your breathing as starlight floods the cards.",
           success: {
@@ -441,6 +443,7 @@ export const storyNodes: StoryNode[] = [
         text: "Survey the Rift through a prism lens",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 13,
           flavor: "You align crystal rings to focus the Ember Rift's glow.",
           success: {
@@ -547,6 +550,7 @@ export const storyNodes: StoryNode[] = [
         text: "Spar with Corin to hone your reflexes",
         skillCheck: {
           ability: "dexterity",
+          skill: "acrobatics",
           difficultyClass: 13,
           flavor: "You pivot across the chalked sigils, matching Corin's disciplined strikes.",
           success: {
@@ -835,6 +839,7 @@ export const storyNodes: StoryNode[] = [
         text: "Improvise a verse alongside Liora",
         skillCheck: {
           ability: "charisma",
+          skill: "persuasion",
           difficultyClass: 13,
           flavor: "You match Liora's rhythm, weaving your legend into the melody.",
           success: {
@@ -925,6 +930,7 @@ export const storyNodes: StoryNode[] = [
         text: "Assist Whirr with a tune-up",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 12,
           flavor: "You adjust miniature gears with jeweler precision.",
           success: {
@@ -1006,6 +1012,7 @@ export const storyNodes: StoryNode[] = [
         text: "Study her lyric-encoded battle plans",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 14,
           success: {
             resultText:
@@ -1058,6 +1065,7 @@ export const storyNodes: StoryNode[] = [
         text: "Roll the Ember Dice",
         skillCheck: {
           ability: "dexterity",
+          skill: "acrobatics",
           difficultyClass: 12,
           flavor: "You flick the dice with practiced flair, letting fate tumble.",
           success: {
@@ -1166,7 +1174,8 @@ export const storyNodes: StoryNode[] = [
         id: "negotiate-stakes",
         text: "Negotiate better stakes",
         skillCheck: {
-          ability: "persuasion",
+          ability: "charisma",
+          skill: "persuasion",
           difficultyClass: 14,
           success: {
             resultText:
@@ -1217,6 +1226,7 @@ export const storyNodes: StoryNode[] = [
         text: "Take furious notes",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 12,
           flavor: "You attempt to decode the professor's spiral handwriting.",
           success: {
@@ -1292,6 +1302,7 @@ export const storyNodes: StoryNode[] = [
         description: "Use your perception to spot danger.",
         skillCheck: {
           ability: "wisdom",
+          skill: "perception",
           difficultyClass: 13,
           flavor: "You narrow your eyes and let instincts guide you.",
           success: {
@@ -1323,6 +1334,7 @@ export const storyNodes: StoryNode[] = [
         description: "Perhaps diplomacy will win the day.",
         skillCheck: {
           ability: "charisma",
+          skill: "persuasion",
           difficultyClass: 12,
           success: {
             resultText: "Your words startle the goblin into parley.",
@@ -1447,6 +1459,7 @@ export const storyNodes: StoryNode[] = [
         text: "Request a blessing upon your weapon",
         skillCheck: {
           ability: "wisdom",
+          skill: "survival",
           difficultyClass: 12,
           flavor: "You hold your weapon steady as Lys chants over emberbloom petals.",
           success: {
@@ -1515,6 +1528,7 @@ export const storyNodes: StoryNode[] = [
         text: "Stabilize the magic with improvised wards",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 13,
           flavor: "You trace counter-runes to redirect the volatile current.",
           success: {
@@ -1637,6 +1651,7 @@ export const storyNodes: StoryNode[] = [
         text: "Plan tactics with Thalia",
         skillCheck: {
           ability: "wisdom",
+          skill: "insight",
           difficultyClass: 13,
           flavor:
             "You weigh the Watch's reports and propose a daring approach.",
@@ -1705,6 +1720,7 @@ export const storyNodes: StoryNode[] = [
         text: "Wake the exhausted courier",
         skillCheck: {
           ability: "charisma",
+          skill: "persuasion",
           difficultyClass: 11,
           success: {
             resultText:
@@ -1794,6 +1810,7 @@ export const storyNodes: StoryNode[] = [
         text: "Assist Selka with calibrating a steam sprite",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 14,
           flavor: "You adjust brass valves while the sprite giggles in puffed steam.",
           success: {
@@ -1854,6 +1871,7 @@ export const storyNodes: StoryNode[] = [
         text: "Mirror the mime's movements",
         skillCheck: {
           ability: "dexterity",
+          skill: "acrobatics",
           difficultyClass: 12,
           flavor: "You glide through invisible currents, matching each silent clap.",
           success: {
@@ -1947,6 +1965,7 @@ export const storyNodes: StoryNode[] = [
         text: "Assist Caretaker Amari with feeding",
         skillCheck: {
           ability: "wisdom",
+          skill: "survival",
           difficultyClass: 13,
           flavor: "You mimic Amari's calming cadence to soothe a restless phoenix kit.",
           success: {
@@ -2023,6 +2042,7 @@ export const storyNodes: StoryNode[] = [
         text: "Study the runes for another solution",
         skillCheck: {
           ability: "intelligence",
+          skill: "arcana",
           difficultyClass: 14,
           success: {
             resultText: "You decipher a rune that weakens the seal.",
@@ -2154,6 +2174,7 @@ export const storyNodes: StoryNode[] = [
         text: "Exchange banter with the cackling sprites",
         skillCheck: {
           ability: "charisma",
+          skill: "persuasion",
           difficultyClass: 14,
           flavor: "Humor might crack their harmony.",
           success: {
@@ -2282,6 +2303,7 @@ export const storyNodes: StoryNode[] = [
         text: "Trade your observations for coordinates",
         skillCheck: {
           ability: "intelligence",
+          skill: "history",
           difficultyClass: 14,
           flavor: "You compare your notes with Aelis' shifting diagrams.",
           success: {
@@ -2370,6 +2392,7 @@ export const storyNodes: StoryNode[] = [
         text: "Join the sprites' dance",
         skillCheck: {
           ability: "dexterity",
+          skill: "acrobatics",
           difficultyClass: 13,
           flavor: "You match the sprites' swoops across the floating stones.",
           success: {
@@ -2397,6 +2420,7 @@ export const storyNodes: StoryNode[] = [
         text: "Interpret the sprites' glyphs",
         skillCheck: {
           ability: "wisdom",
+          skill: "insight",
           difficultyClass: 14,
           flavor: "You attune to their lilting laughter, translating emotion into meaning.",
           success: {
@@ -2462,7 +2486,8 @@ export const storyNodes: StoryNode[] = [
         id: "negotiate",
         text: "Attempt to negotiate Pyrel's surrender",
         skillCheck: {
-          ability: "persuasion",
+          ability: "charisma",
+          skill: "persuasion",
           difficultyClass: 16,
           flavor: "Appeal to the Archon's pride and loneliness.",
           success: {

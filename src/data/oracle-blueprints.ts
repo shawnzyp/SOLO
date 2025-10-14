@@ -1,4 +1,10 @@
-import type { Ability, ArcaneNarrativeContext, Hero, StoryChoice } from '../systems/types';
+import type {
+  Ability,
+  ArcaneNarrativeContext,
+  Hero,
+  Skill,
+  StoryChoice,
+} from '../systems/types';
 
 export interface OracleTemplateContext {
   heroName: string;
@@ -25,6 +31,7 @@ export interface OracleBlueprintChoice {
   motifHint?: string;
   skill?: {
     ability: Ability;
+    skill?: Skill;
     difficultyClass: number;
     successTemplates: string[];
     failureTemplates: string[];
@@ -107,6 +114,7 @@ export const ORACLE_BLUEPRINTS: OracleBlueprint[] = [
         ],
         skill: {
           ability: 'intelligence',
+          skill: 'arcana',
           difficultyClass: 14,
           successTemplates: [
             'The echo calms beneath your focus, revealing a lucid path through the vision.',
@@ -180,6 +188,7 @@ export const ORACLE_BLUEPRINTS: OracleBlueprint[] = [
         ],
         skill: {
           ability: 'charisma',
+          skill: 'persuasion',
           difficultyClass: 13,
           successTemplates: [
             'The crowd gasps as you turn the final riddle, earning a whispered revelation.',
@@ -249,6 +258,7 @@ export const ORACLE_BLUEPRINTS: OracleBlueprint[] = [
         ],
         skill: {
           ability: 'wisdom',
+          skill: 'survival',
           difficultyClass: 12,
           successTemplates: [
             'Spirits ring you with warm light, imparting a trail that leads safely onward.',
@@ -364,6 +374,7 @@ export function renderOracleChoice(
   if (blueprintChoice.skill) {
     choice.skillCheck = {
       ability: blueprintChoice.skill.ability,
+      skill: blueprintChoice.skill.skill,
       difficultyClass: blueprintChoice.skill.difficultyClass,
       flavor: blueprintChoice.motifHint
         ? fillTemplate(blueprintChoice.motifHint, context)

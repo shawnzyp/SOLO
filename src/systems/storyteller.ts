@@ -269,6 +269,7 @@ export class ArcaneStorytellerEngine {
     if (choice.skillCheck && typeof choice.skillCheck === 'object') {
       const skill = choice.skillCheck as {
         ability?: unknown;
+        skill?: unknown;
         difficultyClass?: unknown;
         flavor?: unknown;
         success?: unknown;
@@ -277,6 +278,7 @@ export class ArcaneStorytellerEngine {
       if (typeof skill.ability === 'string' && typeof skill.difficultyClass === 'number') {
         normalized.skillCheck = {
           ability: skill.ability as any,
+          skill: typeof skill.skill === 'string' ? (skill.skill as any) : undefined,
           difficultyClass: skill.difficultyClass,
           flavor: typeof skill.flavor === 'string' ? skill.flavor : undefined,
           success: {
