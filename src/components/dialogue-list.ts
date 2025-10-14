@@ -3,6 +3,12 @@ import type { StoryChoice } from '../systems/types';
 
 interface DialogueTemplateChoice extends StoryChoice {
   disabled?: boolean;
+  skillCheckMeta?: {
+    modifier: number;
+    successChance: number;
+    successPercent: number;
+    accessibilityLabel: string;
+  };
 }
 
 export class DDDialogueList extends HTMLElement {
@@ -101,15 +107,73 @@ export class DDDialogueList extends HTMLElement {
 
           .meta {
             color: rgba(255, 255, 255, 0.65);
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
           }
 
           .locked {
             color: rgba(255, 180, 180, 0.85);
           }
+
+          .check-summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+          }
+
+          .check-odds {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.1rem 0.4rem;
+            border-radius: 999px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            background: rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.85);
+          }
+
+          .check-odds.high {
+            background: rgba(46, 204, 113, 0.18);
+            color: #a7f3c7;
+          }
+
+          .check-odds.medium {
+            background: rgba(241, 196, 15, 0.2);
+            color: #fbe39a;
+          }
+
+          .check-odds.low {
+            background: rgba(231, 76, 60, 0.22);
+            color: #f5b1a7;
+          }
+
+          .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+            white-space: nowrap;
+          }
         </style>
         <ul>
           ${this.choices.map((choice, index) => {
             const hotkey = String(index + 1);
+            const oddsTone =
+              choice.skillCheckMeta && typeof choice.skillCheckMeta.successChance === 'number'
+                ? this.describeOddsTone(choice.skillCheckMeta.successChance)
+                : null;
+            const oddsClass = ['check-odds', oddsTone].filter(Boolean).join(' ');
+            const modifierLabel =
+              choice.skillCheckMeta && typeof choice.skillCheckMeta.modifier === 'number'
+                ? `${choice.skillCheckMeta.modifier >= 0 ? '+' : ''}${choice.skillCheckMeta.modifier}`
+                : null;
             return html`
               <li>
                 <button
@@ -124,9 +188,21 @@ export class DDDialogueList extends HTMLElement {
                     : null}
                   ${choice.skillCheck
                     ? html`<div class="meta">
-                        ${choice.skillCheck.ability.toUpperCase()} Check · DC
-                        ${choice.skillCheck.difficultyClass}
-                        ${choice.skillCheck.flavor ? html`· ${choice.skillCheck.flavor}` : null}
+                        <span class="check-summary">
+                          ${choice.skillCheck.ability.toUpperCase()} Check · DC
+                          ${choice.skillCheck.difficultyClass}
+                          ${choice.skillCheck.flavor ? html`· ${choice.skillCheck.flavor}` : null}
+                        </span>
+                        ${choice.skillCheckMeta
+                          ? html`<span
+                              class=${oddsClass}
+                              aria-label=${choice.skillCheckMeta.accessibilityLabel}
+                              title=${modifierLabel ? `Modifier ${modifierLabel}` : ''}
+                            >
+                              ${choice.skillCheckMeta.successPercent}%
+                              <span class="sr-only">${choice.skillCheckMeta.accessibilityLabel}</span>
+                            </span>`
+                          : null}
                       </div>`
                     : null}
                   ${choice.disabled
@@ -164,6 +240,16 @@ export class DDDialogueList extends HTMLElement {
       }
     });
     return segments.join(' · ');
+  }
+
+  private describeOddsTone(chance: number): 'high' | 'medium' | 'low' {
+    if (chance >= 0.7) {
+      return 'high';
+    }
+    if (chance >= 0.4) {
+      return 'medium';
+    }
+    return 'low';
   }
 
   private describeOperator(operator?: NonNullable<DialogueTemplateChoice['requirements']>[number]['operator']): string {
