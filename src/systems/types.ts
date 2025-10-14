@@ -281,9 +281,43 @@ export interface OracleSceneRecord {
   choices: StoryChoice[];
 }
 
+export interface ArcaneNarrativeNodeSummary {
+  id: string;
+  title: string;
+  summary: string;
+  tags?: string[];
+  background?: string;
+  ambient?: string;
+  origin?: StoryNodeOrigin;
+}
+
+export interface ArcaneNarrativeFactionStanding {
+  id: string;
+  name: string;
+  description: string;
+  value: number;
+}
+
+export interface ArcaneNarrativeJournalEntry {
+  id: string;
+  timestamp: number;
+  text: string;
+}
+
+export interface ArcaneNarrativeAchievement {
+  id: string;
+  title: string;
+  description: string;
+  unlockedAt: number;
+}
+
 export interface ArcaneNarrativeContext {
   prompt: string;
   returnNodeId: string | null;
+  currentNode?: ArcaneNarrativeNodeSummary | null;
+  factionStandings?: ArcaneNarrativeFactionStanding[];
+  journalHighlights?: ArcaneNarrativeJournalEntry[];
+  achievements?: ArcaneNarrativeAchievement[];
 }
 
 export interface ArcaneNarrativeResult {

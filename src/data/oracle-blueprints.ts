@@ -1,4 +1,4 @@
-import type { Ability, Hero, StoryChoice } from '../systems/types';
+import type { Ability, ArcaneNarrativeContext, Hero, StoryChoice } from '../systems/types';
 
 export interface OracleTemplateContext {
   heroName: string;
@@ -8,6 +8,11 @@ export interface OracleTemplateContext {
   heroBackgroundId: string;
   prompt: string;
   motif: string;
+  currentNodeTitle: string;
+  currentNodeSummary: string;
+  factionSnapshot: string;
+  journalHighlight: string;
+  achievementHighlight: string;
 }
 
 export interface OracleBlueprintChoice {
@@ -270,13 +275,22 @@ export const ORACLE_BLUEPRINTS: OracleBlueprint[] = [
   },
 ];
 
-export function pickBlueprint(hero: Hero | null, prompt: string): OracleBlueprintSelection {
+export function pickBlueprint(
+  hero: Hero | null,
+  prompt: string,
+  narrativeContext?: ArcaneNarrativeContext,
+): OracleBlueprintSelection {
   if (!ORACLE_BLUEPRINTS.length) {
     throw new Error('No oracle blueprints configured.');
   }
 
   const classId = hero?.heroClass.id ?? '';
   const backgroundId = hero?.background.id ?? '';
+
+  const currentTags = new Set(
+    (narrativeContext?.currentNode?.tags ?? []).map((tag) => tag.toLowerCase()),
+  );
+  const notableFactions = narrativeContext?.factionStandings ?? [];
 
   const weighted = ORACLE_BLUEPRINTS.reduce<Array<{ score: number; blueprint: OracleBlueprint }>>(
     (acc, blueprint) => {
@@ -292,6 +306,19 @@ export function pickBlueprint(hero: Hero | null, prompt: string): OracleBlueprin
       }
       if (prompt.toLowerCase().includes('court') && blueprint.id === 'verdyn-bazaar-rumor') {
         score += 1;
+      }
+      const blueprintTags = (blueprint.tags ?? []).map((tag) => tag.toLowerCase());
+      let tagAffinity = 0;
+      for (const tag of currentTags) {
+        if (blueprintTags.includes(tag)) {
+          tagAffinity += 1;
+        }
+      }
+      if (tagAffinity > 0) {
+        score += tagAffinity;
+      }
+      if (notableFactions.some((faction) => faction.value >= 10) && blueprintTags.includes('social')) {
+        score += 0.5;
       }
       acc.push({ score, blueprint });
       return acc;
@@ -369,7 +396,12 @@ export function fillTemplate(template: string, context: OracleTemplateContext): 
     .replace(/{{heroBackgroundName}}/g, context.heroBackgroundName)
     .replace(/{{heroBackgroundId}}/g, context.heroBackgroundId)
     .replace(/{{prompt}}/g, context.prompt)
-    .replace(/{{motif}}/g, context.motif);
+    .replace(/{{motif}}/g, context.motif)
+    .replace(/{{currentNodeTitle}}/g, context.currentNodeTitle)
+    .replace(/{{currentNodeSummary}}/g, context.currentNodeSummary)
+    .replace(/{{factionSnapshot}}/g, context.factionSnapshot)
+    .replace(/{{journalHighlight}}/g, context.journalHighlight)
+    .replace(/{{achievementHighlight}}/g, context.achievementHighlight);
 }
 
 function randomFrom<T>(list: T[]): T {
