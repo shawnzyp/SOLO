@@ -22,20 +22,39 @@ export class DDToastStack extends HTMLElement {
           :host {
             position: fixed;
             top: 1.5rem;
+            top: calc(1.5rem + env(safe-area-inset-top, 0px));
             right: 1.5rem;
+            right: calc(1.5rem + env(safe-area-inset-right, 0px));
             display: grid;
             gap: 0.75rem;
             z-index: 1000;
           }
 
           .toast {
-            min-width: 220px;
+            min-width: 200px;
+            width: min(90vw, 320px);
             padding: 0.75rem 1rem;
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(22, 18, 32, 0.92);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             animation: slide-in 250ms ease;
+          }
+
+          @media (max-width: 480px) {
+            :host {
+              top: auto;
+              bottom: 1.5rem;
+              bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+              left: 50%;
+              right: auto;
+              transform: translateX(-50%);
+              width: min(100%, calc(320px + env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)));
+            }
+
+            .toast {
+              width: min(90vw, 300px);
+            }
           }
 
           .toast.success {
