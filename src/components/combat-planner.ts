@@ -368,16 +368,24 @@ export class DDCombatPlanner extends HTMLElement {
             color: rgba(255, 255, 255, 0.65);
           }
 
+          .skill-table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+            min-width: 100%;
+          }
+
           .skill-table {
             border-radius: 12px;
-            overflow: hidden;
             border: 1px solid rgba(255, 210, 164, 0.12);
           }
 
           table {
             width: 100%;
+            min-width: 520px;
             border-collapse: collapse;
             background: rgba(8, 6, 18, 0.85);
+            border-radius: 12px;
           }
 
           th,
@@ -385,6 +393,26 @@ export class DDCombatPlanner extends HTMLElement {
             padding: 0.55rem 0.75rem;
             text-align: left;
             font-size: 0.8rem;
+          }
+
+          @media (max-width: 640px) {
+            :host {
+              padding: 1rem;
+            }
+
+            .section {
+              padding: 0.75rem;
+            }
+
+            th,
+            td {
+              padding: 0.5rem 0.6rem;
+              font-size: 0.75rem;
+            }
+
+            th {
+              font-size: 0.7rem;
+            }
           }
 
           th {
@@ -558,27 +586,29 @@ export class DDCombatPlanner extends HTMLElement {
                     </select>
                   </label>
                 </form>
-                <div class="skill-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Skill</th>
-                        <th>Ability</th>
-                        <th>Modifier</th>
-                        <th>Success</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${skillSummaries.map((entry, index) => html`
-                        <tr class=${index < 3 ? 'highlight' : ''}>
-                          <td>${entry.label}</td>
-                          <td>${ABILITY_LABELS[entry.ability]}</td>
-                          <td>${entry.modifier >= 0 ? `+${entry.modifier}` : entry.modifier}</td>
-                          <td>${roundToPercent(entry.chance)}</td>
+                <div class="skill-table-scroll">
+                  <div class="skill-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Skill</th>
+                          <th>Ability</th>
+                          <th>Modifier</th>
+                          <th>Success</th>
                         </tr>
-                      `)}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        ${skillSummaries.map((entry, index) => html`
+                          <tr class=${index < 3 ? 'highlight' : ''}>
+                            <td>${entry.label}</td>
+                            <td>${ABILITY_LABELS[entry.ability]}</td>
+                            <td>${entry.modifier >= 0 ? `+${entry.modifier}` : entry.modifier}</td>
+                            <td>${roundToPercent(entry.chance)}</td>
+                          </tr>
+                        `)}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
                 <p class="subtitle">
                   Highest odds: ${bestSkills
