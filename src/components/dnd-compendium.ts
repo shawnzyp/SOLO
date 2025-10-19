@@ -551,6 +551,39 @@ export class DDDndCompendium extends HTMLElement {
         .subsections li {
           margin-bottom: 0.25rem;
         }
+
+        @media (max-width: 768px) {
+          .compendium-body {
+            grid-template-columns: minmax(0, 1fr);
+            grid-auto-flow: row;
+          }
+
+          .category-list {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 0.6rem;
+          }
+
+          .category-button,
+          .entry-button {
+            width: 100%;
+            padding: 0.9rem 0.85rem;
+          }
+
+          .entry-panel {
+            gap: 0.75rem;
+          }
+
+          .entry-list {
+            max-height: none;
+            overflow-y: visible;
+            gap: 0.55rem;
+          }
+
+          .detail-panel {
+            min-height: 0;
+            max-height: none;
+          }
+        }
       </style>
       <div class="header">
         <h2>D&D 5e SRD Reference</h2>
