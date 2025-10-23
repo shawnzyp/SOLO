@@ -27,6 +27,7 @@ import {
 import { storyNodes, getNodeById, registerDynamicNode, resetDynamicNodes } from '../data/story';
 import { ArcaneStorytellerEngine } from './storyteller';
 import { SafeEventTarget } from './event-target';
+import { clone } from './clone';
 
 export type WorldEventType =
   | 'state-change'
@@ -112,7 +113,7 @@ export class World implements EventTarget {
   }
 
   get snapshot(): WorldState {
-    return structuredClone(this.state);
+    return clone(this.state);
   }
 
   get currentNode(): StoryNode | null {
