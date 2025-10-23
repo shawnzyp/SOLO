@@ -1,6 +1,7 @@
 import { rollD20, rollFromNotation } from './dice';
 import type { Ability, CombatEncounter, Hero, InventoryItem } from './types';
 import { SafeEventTarget } from './event-target';
+import { clone } from './clone';
 
 export type CombatAction = 'attack' | 'defend' | 'use-item' | 'flee';
 
@@ -91,8 +92,8 @@ export class CombatSession implements EventTarget {
   private proficiencyBonus: number;
 
   constructor(hero: Hero, encounter: CombatEncounter) {
-    this.hero = structuredClone(hero);
-    this.encounter = structuredClone(encounter);
+    this.hero = clone(hero);
+    this.encounter = clone(encounter);
     this.state = {
       heroHP: hero.currentHP,
       heroMaxHP: hero.maxHP,
@@ -620,7 +621,7 @@ export class CombatSession implements EventTarget {
   }
 
   getHeroOutcome(): Hero {
-    const hero = structuredClone(this.hero);
+    const hero = clone(this.hero);
     hero.currentHP = this.state.heroHP;
     hero.inventory = hero.inventory.map((item, index) => {
       const key = `${item.id}-${index}`;
