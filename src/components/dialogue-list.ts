@@ -13,6 +13,7 @@ interface DialogueTemplateChoice extends StoryChoice {
 
 export class DDDialogueList extends HTMLElement {
   private choices: DialogueTemplateChoice[] = [];
+  private quickActionsLocked = false;
 
   constructor() {
     super();
@@ -30,6 +31,11 @@ export class DDDialogueList extends HTMLElement {
 
   set data(choices: DialogueTemplateChoice[]) {
     this.choices = choices;
+    this.update();
+  }
+
+  set locked(value: boolean) {
+    this.quickActionsLocked = value;
     this.update();
   }
 
@@ -82,6 +88,26 @@ export class DDDialogueList extends HTMLElement {
             cursor: not-allowed;
             filter: grayscale(50%);
             border-color: rgba(255, 210, 164, 0.12);
+          }
+
+          .lock-banner {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 210, 164, 0.22);
+            background: rgba(12, 8, 20, 0.8);
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 0.85rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+          }
+
+          .lock-banner span {
+            font-family: 'Cinzel', serif;
+            color: rgba(240, 179, 90, 0.9);
+            letter-spacing: 0.08em;
           }
 
           .hotkey {
@@ -162,6 +188,12 @@ export class DDDialogueList extends HTMLElement {
             white-space: nowrap;
           }
         </style>
+        ${this.quickActionsLocked
+          ? html`<div class="lock-banner" role="status">
+              <span aria-hidden="true">⌛</span>
+              Await the Dungeon Master’s narration…
+            </div>`
+          : null}
         <ul>
           ${this.choices.map((choice, index) => {
             const hotkey = String(index + 1);
@@ -189,7 +221,7 @@ export class DDDialogueList extends HTMLElement {
             return html`
               <li>
                 <button
-                  ?disabled=${choice.disabled}
+                  ?disabled=${choice.disabled || this.quickActionsLocked}
                   @click=${() => this.select(choice)}
                   data-choice-id=${choice.id}
                 >
@@ -290,7 +322,7 @@ export class DDDialogueList extends HTMLElement {
   }
 
   private select(choice: DialogueTemplateChoice): void {
-    if (choice.disabled) return;
+    if (choice.disabled || this.quickActionsLocked) return;
     this.dispatchEvent(
       new CustomEvent('choice-selected', {
         detail: { choice },
@@ -301,6 +333,7 @@ export class DDDialogueList extends HTMLElement {
   }
 
   private handleKeyPress(event: KeyboardEvent): void {
+    if (this.quickActionsLocked) return;
     if (event.defaultPrevented) return;
     const keyIndex = Number.parseInt(event.key, 10) - 1;
     if (Number.isNaN(keyIndex)) return;

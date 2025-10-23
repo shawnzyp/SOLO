@@ -314,6 +314,7 @@ interface RootState {
   compendiumError: string | null;
   storyteller: ArcaneStorytellerPanelState;
   activePanel: 'story' | 'hero' | 'tools' | 'lore';
+  quickActionsLocked: boolean;
 }
 
 export class DDRoot extends HTMLElement {
@@ -348,6 +349,7 @@ export class DDRoot extends HTMLElement {
     compendiumError: null,
     storyteller: { ...DEFAULT_STORYTELLER_STATE },
     activePanel: 'story',
+    quickActionsLocked: false,
   };
 
   private combatSession: CombatSession | null = null;
@@ -368,6 +370,9 @@ export class DDRoot extends HTMLElement {
     this.handleDowntimeTaskProgressed = this.handleDowntimeTaskProgressed.bind(this);
     this.handleDowntimeTaskCompleted = this.handleDowntimeTaskCompleted.bind(this);
     this.handleInventoryUse = this.handleInventoryUse.bind(this);
+    this.handleStoryTypingStart = this.handleStoryTypingStart.bind(this);
+    this.handleStoryTypingComplete = this.handleStoryTypingComplete.bind(this);
+    this.handleTabActivate = this.handleTabActivate.bind(this);
   }
 
   connectedCallback(): void {
@@ -382,6 +387,8 @@ export class DDRoot extends HTMLElement {
     );
     this.addEventListener('downtime-task-completed', this.handleDowntimeTaskCompleted as EventListener);
     this.addEventListener('inventory-use', this.handleInventoryUse as EventListener);
+    this.addEventListener('story-typing-start', this.handleStoryTypingStart as EventListener);
+    this.addEventListener('story-typing-complete', this.handleStoryTypingComplete as EventListener);
     this.heroOptionsUnsubscribe = subscribeHeroOptions((options) => {
       const reconciled = this.reconcileHeroCreation(this.state.heroCreation, options);
       this.state = {
@@ -414,6 +421,16 @@ export class DDRoot extends HTMLElement {
           ...entry,
           isCurrent: entry.id === detail.currentNodeId,
         }));
+      const previousNode = this.state.node;
+      const nodeIdChanged = (node?.id ?? null) !== (previousNode?.id ?? null);
+      const narrativeChanged =
+        nodeIdChanged ||
+        (node && previousNode ? node.body.join('\u0000') !== previousNode.body.join('\u0000') : false);
+      const quickActionsLocked = node
+        ? narrativeChanged
+          ? this.shouldLockForNode(node)
+          : this.state.quickActionsLocked
+        : false;
       this.state = {
         ...this.state,
         hero: detail.hero,
@@ -426,6 +443,7 @@ export class DDRoot extends HTMLElement {
         mode: detail.hero ? (this.state.mode === 'combat' ? 'combat' : 'story') : 'creation',
         mapNodes,
         storyteller: detail.hero ? this.state.storyteller : { ...DEFAULT_STORYTELLER_STATE },
+        quickActionsLocked,
       };
       this.requestRender();
     });
@@ -537,6 +555,8 @@ export class DDRoot extends HTMLElement {
     );
     this.removeEventListener('downtime-task-completed', this.handleDowntimeTaskCompleted as EventListener);
     this.removeEventListener('inventory-use', this.handleInventoryUse as EventListener);
+    this.removeEventListener('story-typing-start', this.handleStoryTypingStart as EventListener);
+    this.removeEventListener('story-typing-complete', this.handleStoryTypingComplete as EventListener);
     if (this.heroOptionsUnsubscribe) {
       this.heroOptionsUnsubscribe();
       this.heroOptionsUnsubscribe = null;
@@ -563,8 +583,58 @@ export class DDRoot extends HTMLElement {
   private handleChoiceSelected(event: CustomEvent<{ choice: StoryChoice }>): void {
     event.stopPropagation();
     const { choice } = event.detail;
+    if (this.state.quickActionsLocked) return;
     if ((choice as RenderChoice).disabled) return;
     this.world.applyChoice(choice);
+    this.deferPanelScroll('story');
+  }
+
+  private handleTabActivate(event: Event, panel: RootState['activePanel']): void {
+    event.preventDefault();
+    this.setActivePanel(panel);
+    this.deferPanelScroll(panel);
+  }
+
+  private handleStoryTypingStart(event: CustomEvent<{ locked?: boolean }>): void {
+    event.stopPropagation();
+    const shouldLock = event.detail?.locked ?? true;
+    if (this.state.quickActionsLocked === shouldLock) {
+      return;
+    }
+    this.state = { ...this.state, quickActionsLocked: shouldLock };
+    this.requestRender();
+  }
+
+  private handleStoryTypingComplete(event: Event): void {
+    event.stopPropagation();
+    if (!this.state.quickActionsLocked) {
+      return;
+    }
+    this.state = { ...this.state, quickActionsLocked: false };
+    this.requestRender();
+  }
+
+  private deferPanelScroll(panelId?: RootState['activePanel']): void {
+    const targetPanel = panelId ?? this.state.activePanel;
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => this.scrollPanelToTop(targetPanel));
+    } else {
+      this.scrollPanelToTop(targetPanel);
+    }
+  }
+
+  private scrollPanelToTop(panelId?: RootState['activePanel']): void {
+    if (!this.shadowRoot) return;
+    const scrollContainer = this.shadowRoot.querySelector('.panel-scroll');
+    if (!(scrollContainer instanceof HTMLElement)) return;
+    if (panelId) {
+      const panel = scrollContainer.querySelector(`#panel-${panelId}`);
+      if (panel instanceof HTMLElement) {
+        scrollContainer.scrollTo({ top: panel.offsetTop, behavior: 'smooth' });
+        return;
+      }
+    }
+    scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   private handleCombatAction(event: CustomEvent<{ action: CombatAction; itemId?: string }>): void {
@@ -938,6 +1008,11 @@ export class DDRoot extends HTMLElement {
           skillCheckMeta,
         };
       });
+  }
+
+  private shouldLockForNode(node: StoryNode | null): boolean {
+    if (!node) return false;
+    return node.body.some((paragraph) => paragraph.trim().length > 0);
   }
 
   private handleHeroCreationInput(event: Event): void {
@@ -1339,6 +1414,8 @@ export class DDRoot extends HTMLElement {
       compendiumLoading,
       compendiumError,
       activePanel,
+      quickActionsLocked,
+      storyteller,
     } = this.state;
     const normalizedCreation = this.getNormalizedHeroCreation();
     const heroRaces = heroOptions.races;
@@ -1435,19 +1512,26 @@ export class DDRoot extends HTMLElement {
       label: entry.label,
       display: entry.value >= 0 ? `+${entry.value}` : `${entry.value}`,
     }));
+    const storyChoices = choices.map((choice) => ({
+      ...choice,
+      disabled: choice.disabled || quickActionsLocked,
+    }));
     const modeChipLabel =
       mode === 'combat' ? 'Combat Turn' : mode === 'creation' ? 'Create Hero' : 'Story Phase';
     const modeChipClass = mode;
     const storyContent = html`
       <dd-story-panel .data=${node}></dd-story-panel>
       ${mode !== 'creation'
-        ? html`<dd-arcane-storyteller .data=${this.state.storyteller}></dd-arcane-storyteller>`
+        ? html`<dd-arcane-storyteller .data=${storyteller}></dd-arcane-storyteller>`
         : null}
       ${mode === 'combat' && combat.encounter && combat.snapshot
         ? html`<dd-combat-hud
             .data=${{ snapshot: combat.snapshot, enemyName: combat.encounter.enemy.name }}
           ></dd-combat-hud>`
-        : html`<dd-dialogue-list .data=${choices}></dd-dialogue-list>`}
+        : html`<dd-dialogue-list
+            .data=${storyChoices}
+            .locked=${quickActionsLocked}
+          ></dd-dialogue-list>`}
     `;
     const heroContent = html`
       <dd-character-sheet
@@ -1480,25 +1564,34 @@ export class DDRoot extends HTMLElement {
         <style>
           :host {
             display: block;
-            min-height: 100dvh;
-            padding: 1.25rem 1rem 5.5rem;
-            color: var(--dd-text);
+            box-sizing: border-box;
             position: relative;
-            width: min(540px, 100%);
+            width: min(100vw, 100dvh, 480px);
+            height: 100dvh;
             margin: 0 auto;
+            padding: 0.75rem;
+            color: var(--dd-text);
           }
 
-          .mobile-app {
+          .app-shell {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
-            min-height: calc(100dvh - 2.5rem);
+            gap: 0.75rem;
+            height: 100%;
+            border-radius: 24px;
+            padding: 0.75rem;
+            background: radial-gradient(circle at top, rgba(34, 24, 54, 0.92), rgba(12, 8, 20, 0.94));
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(18px);
+            overflow: hidden;
           }
 
           .app-header {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
+            flex-shrink: 0;
           }
 
           .mode-chip {
@@ -1513,20 +1606,20 @@ export class DDRoot extends HTMLElement {
           }
 
           .mode-chip.combat {
-            background: rgba(242, 125, 114, 0.2);
+            background: rgba(242, 125, 114, 0.22);
             color: rgba(255, 184, 176, 0.95);
           }
 
           .mode-chip.creation {
-            background: rgba(106, 192, 255, 0.18);
-            color: rgba(106, 192, 255, 0.92);
+            background: rgba(106, 192, 255, 0.22);
+            color: rgba(106, 192, 255, 0.94);
           }
 
           .hero-card {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
-            padding: 1.25rem;
+            gap: 0.85rem;
+            padding: 1.1rem;
             border-radius: 20px;
             background: rgba(24, 18, 36, 0.9);
             border: 1px solid rgba(255, 210, 164, 0.2);
@@ -1553,12 +1646,12 @@ export class DDRoot extends HTMLElement {
           .hero-card__name {
             margin: 0;
             font-family: 'Cinzel', serif;
-            font-size: 1.4rem;
+            font-size: 1.35rem;
             letter-spacing: 0.06em;
           }
 
           .hero-card__meta {
-            margin: 0.25rem 0 0;
+            margin: 0.2rem 0 0;
             font-size: 0.85rem;
             color: rgba(255, 255, 255, 0.78);
           }
@@ -1598,7 +1691,7 @@ export class DDRoot extends HTMLElement {
           }
 
           .stat-pill strong {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-family: 'Cinzel', serif;
             letter-spacing: 0.04em;
           }
@@ -1626,34 +1719,58 @@ export class DDRoot extends HTMLElement {
             color: rgba(255, 255, 255, 0.92);
           }
 
-          .screen {
+          .app-main {
             flex: 1;
-            display: grid;
-          }
-
-          .screen > .panel-stack {
+            min-height: 0;
             display: flex;
             flex-direction: column;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 210, 164, 0.16);
+            background: linear-gradient(180deg, rgba(26, 18, 38, 0.92), rgba(12, 8, 20, 0.96));
+            overflow: hidden;
+          }
+
+          .panel-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 0.35rem;
+            scroll-behavior: smooth;
+          }
+
+          .panel-scroll::-webkit-scrollbar {
+            width: 6px;
+          }
+
+          .panel-scroll::-webkit-scrollbar-thumb {
+            background: rgba(240, 179, 90, 0.3);
+            border-radius: 999px;
+          }
+
+          .panel-stack {
+            display: grid;
             gap: 1rem;
-            width: 100%;
+            padding-bottom: 1.25rem;
+          }
+
+          .panel-stack[hidden] {
+            display: none !important;
           }
 
           .tab-bar {
-            position: sticky;
-            bottom: 0.75rem;
-            left: 0;
-            right: 0;
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.5rem;
             padding: 0.5rem;
             border-radius: 999px;
-            background: rgba(10, 6, 18, 0.9);
-            border: 1px solid rgba(255, 210, 164, 0.18);
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            background: rgba(10, 6, 18, 0.95);
+            border: 1px solid rgba(255, 210, 164, 0.2);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
             backdrop-filter: blur(12px);
-            margin-top: auto;
-            z-index: 20;
+            flex-shrink: 0;
+            margin-top: 0.25rem;
           }
 
           .tab-button {
@@ -1692,10 +1809,17 @@ export class DDRoot extends HTMLElement {
             box-shadow: 0 0 0 3px rgba(106, 192, 255, 0.25);
           }
 
-          @media (min-width: 600px) {
+          @media (min-width: 540px) {
             :host {
-              padding: 2rem 1.5rem 5.5rem;
-              width: min(600px, 100%);
+              padding: 1.5rem;
+            }
+
+            .app-shell {
+              padding: 1.25rem;
+            }
+
+            .app-main {
+              padding: 1rem;
             }
 
             .hero-card__portrait {
@@ -1704,27 +1828,24 @@ export class DDRoot extends HTMLElement {
             }
           }
 
-          @media (min-width: 960px) {
+          @media (min-width: 900px) {
             :host {
-              width: min(720px, 100%);
+              width: min(520px, 100dvh);
             }
           }
 
-          @media (max-width: 640px) {
+          @media (max-width: 420px) {
             :host {
-              padding: 1rem 0.75rem 5rem;
+              padding: 0.5rem;
             }
 
-            .hero-card {
-              padding: 1rem;
-            }
-
-            .hero-card__identity {
-              gap: 0.75rem;
+            .app-shell {
+              border-radius: 20px;
+              padding: 0.6rem;
             }
 
             .tab-bar {
-              bottom: 0.5rem;
+              padding: 0.45rem;
             }
           }
 
@@ -2527,7 +2648,7 @@ export class DDRoot extends HTMLElement {
             }
           }
         </style>
-        <div class="mobile-app">
+        <div class="app-shell" data-mode=${mode} data-panel=${activePanel}>
           <header class="app-header">
             <span class="mode-chip ${modeChipClass}">${modeChipLabel}</span>
             <div class="hero-card">
@@ -2573,44 +2694,46 @@ export class DDRoot extends HTMLElement {
                   </p>`}
             </div>
           </header>
-          <section class="screen" aria-live="polite">
-            <div
-              class="panel-stack"
-              id="panel-story"
-              role="tabpanel"
-              aria-labelledby="tab-story"
-              ?hidden=${activePanel !== 'story'}
-            >
-              ${storyContent}
+          <main class="app-main" aria-live="polite">
+            <div class="panel-scroll">
+              <div
+                class="panel-stack"
+                id="panel-story"
+                role="tabpanel"
+                aria-labelledby="tab-story"
+                ?hidden=${activePanel !== 'story'}
+              >
+                ${storyContent}
+              </div>
+              <div
+                class="panel-stack"
+                id="panel-hero"
+                role="tabpanel"
+                aria-labelledby="tab-hero"
+                ?hidden=${activePanel !== 'hero'}
+              >
+                ${heroContent}
+              </div>
+              <div
+                class="panel-stack"
+                id="panel-tools"
+                role="tabpanel"
+                aria-labelledby="tab-tools"
+                ?hidden=${activePanel !== 'tools'}
+              >
+                ${toolsContent}
+              </div>
+              <div
+                class="panel-stack"
+                id="panel-lore"
+                role="tabpanel"
+                aria-labelledby="tab-lore"
+                ?hidden=${activePanel !== 'lore'}
+              >
+                ${loreContent}
+              </div>
             </div>
-            <div
-              class="panel-stack"
-              id="panel-hero"
-              role="tabpanel"
-              aria-labelledby="tab-hero"
-              ?hidden=${activePanel !== 'hero'}
-            >
-              ${heroContent}
-            </div>
-            <div
-              class="panel-stack"
-              id="panel-tools"
-              role="tabpanel"
-              aria-labelledby="tab-tools"
-              ?hidden=${activePanel !== 'tools'}
-            >
-              ${toolsContent}
-            </div>
-            <div
-              class="panel-stack"
-              id="panel-lore"
-              role="tabpanel"
-              aria-labelledby="tab-lore"
-              ?hidden=${activePanel !== 'lore'}
-            >
-              ${loreContent}
-            </div>
-          </section>
+          </main>
           <nav class="tab-bar" role="tablist" aria-label="Primary navigation">
             ${tabDefinitions.map(
               (tab) => html`
@@ -2622,7 +2745,7 @@ export class DDRoot extends HTMLElement {
                   aria-selected=${activePanel === tab.id ? 'true' : 'false'}
                   aria-controls=${`panel-${tab.id}`}
                   tabindex=${activePanel === tab.id ? '0' : '-1'}
-                  @click=${() => this.setActivePanel(tab.id)}
+                  @click=${(event: Event) => this.handleTabActivate(event, tab.id)}
                 >
                   <span class="icon" aria-hidden="true">${tab.icon}</span>
                   <span>${tab.label}</span>
