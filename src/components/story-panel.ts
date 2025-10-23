@@ -18,17 +18,30 @@ export class DDStoryPanel extends HTMLElement {
   }
 
   set data(node: StoryNode | null) {
-    const previousId = this.node?.id ?? null;
+    const previousNode = this.node;
     this.node = node;
     if (!node) {
       this.stopTyping();
       this.typedParagraphs = [];
       this.update();
+      this.dispatchTypingComplete();
       return;
     }
 
-    if (node.id !== previousId) {
-      this.startTypewriter();
+    const narrativeChanged = this.hasNarrativeChanged(previousNode, node);
+    if (narrativeChanged) {
+      const hasNarration = this.hasNarration(node);
+      if (hasNarration) {
+        this.stopTyping();
+        this.dispatchTypingStart(true);
+        this.startTypewriter();
+      } else {
+        this.stopTyping();
+        this.typedParagraphs = [...node.body];
+        this.update();
+        this.dispatchTypingStart(false);
+        this.dispatchTypingComplete();
+      }
     } else {
       this.update();
     }
@@ -173,6 +186,7 @@ export class DDStoryPanel extends HTMLElement {
     if (!node || node.body.length === 0) {
       this.typedParagraphs = node?.body ?? [];
       this.update();
+      this.dispatchTypingComplete();
       return;
     }
 
@@ -224,6 +238,7 @@ export class DDStoryPanel extends HTMLElement {
       this.typedParagraphs = [];
     }
     this.update();
+    this.dispatchTypingComplete();
   }
 
   private stopTyping(): void {
@@ -232,6 +247,41 @@ export class DDStoryPanel extends HTMLElement {
       this.typingTimeout = null;
     }
     this.isTyping = false;
+  }
+
+  private hasNarration(node: StoryNode): boolean {
+    return node.body.some((paragraph) => paragraph.trim().length > 0);
+  }
+
+  private hasNarrativeChanged(previousNode: StoryNode | null | undefined, nextNode: StoryNode): boolean {
+    if (!previousNode) {
+      return true;
+    }
+    if (previousNode.id !== nextNode.id) {
+      return true;
+    }
+    const previousBody = previousNode.body.join('\u0000');
+    const nextBody = nextNode.body.join('\u0000');
+    return previousBody !== nextBody;
+  }
+
+  private dispatchTypingStart(locked: boolean): void {
+    this.dispatchEvent(
+      new CustomEvent('story-typing-start', {
+        detail: { locked },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private dispatchTypingComplete(): void {
+    this.dispatchEvent(
+      new CustomEvent('story-typing-complete', {
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 }
 
