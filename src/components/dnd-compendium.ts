@@ -24,6 +24,14 @@ interface CompendiumData {
   categories: CompendiumCategorySummary[];
 }
 
+interface SubsectionState {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  detail: SrdRuleSectionDetail | null;
+  abortController: AbortController | null;
+}
+
 const CATEGORY_ICONS: Partial<Record<SrdCompendiumCategory, string>> = {
   rules: '📜',
   'rule-sections': '📖',
@@ -45,6 +53,7 @@ export class DDDndCompendium extends HTMLElement {
   private filter = '';
   private detailAbortController: AbortController | null = null;
   private pendingDetailKey: string | null = null;
+  private subsectionStates = new Map<string, SubsectionState>();
 
   constructor() {
     super();
@@ -62,11 +71,13 @@ export class DDDndCompendium extends HTMLElement {
       this.selectedCategory = fallback ? fallback.id : null;
       this.selectedEntry = fallback?.entries[0]?.index ?? null;
       this.detail = null;
+      this.resetSubsectionStates();
     } else {
       const hasSelectedEntry = currentCategory.entries.some((entry) => entry.index === this.selectedEntry);
       if (!hasSelectedEntry) {
         this.selectedEntry = currentCategory.entries[0]?.index ?? null;
         this.detail = null;
+        this.resetSubsectionStates();
       }
     }
 
@@ -77,6 +88,7 @@ export class DDDndCompendium extends HTMLElement {
       }
     } else {
       this.detail = null;
+      this.resetSubsectionStates();
     }
 
     this.update();
@@ -87,6 +99,7 @@ export class DDDndCompendium extends HTMLElement {
       this.detailAbortController.abort();
       this.detailAbortController = null;
     }
+    this.resetSubsectionStates();
   }
 
   private get totalEntries(): number {
@@ -110,6 +123,7 @@ export class DDDndCompendium extends HTMLElement {
     this.detailLoading = true;
     this.detailError = null;
     this.detail = null;
+    this.resetSubsectionStates();
     this.update();
 
     try {
@@ -118,6 +132,11 @@ export class DDDndCompendium extends HTMLElement {
         return;
       }
       this.detail = detail;
+      if (detail.type === 'rule') {
+        this.prepareSubsections(detail);
+      } else {
+        this.resetSubsectionStates();
+      }
       this.detailLoading = false;
     } catch (error) {
       if (controller.signal.aborted || this.pendingDetailKey !== requestKey) {
@@ -144,6 +163,7 @@ export class DDDndCompendium extends HTMLElement {
     this.filter = '';
     this.detail = null;
     this.detailError = null;
+    this.resetSubsectionStates();
     if (this.selectedCategory && this.selectedEntry) {
       void this.loadDetail(this.selectedCategory, this.selectedEntry);
     } else {
@@ -158,6 +178,7 @@ export class DDDndCompendium extends HTMLElement {
     this.selectedEntry = entryIndex;
     this.detail = null;
     this.detailError = null;
+    this.resetSubsectionStates();
     void this.loadDetail(this.selectedCategory, entryIndex);
   }
 
@@ -170,6 +191,154 @@ export class DDDndCompendium extends HTMLElement {
   private filterEntries(entries: SrdCompendiumEntrySummary[]): SrdCompendiumEntrySummary[] {
     if (!this.filter) return entries;
     return entries.filter((entry) => entry.name.toLowerCase().includes(this.filter));
+  }
+
+  private resetSubsectionStates(): void {
+    for (const state of this.subsectionStates.values()) {
+      state.abortController?.abort();
+    }
+    this.subsectionStates.clear();
+  }
+
+  private prepareSubsections(detail: SrdRuleDetail): void {
+    const indices = new Set(detail.subsections?.map((entry) => entry.index) ?? []);
+    for (const [index, state] of this.subsectionStates.entries()) {
+      if (!indices.has(index)) {
+        state.abortController?.abort();
+        this.subsectionStates.delete(index);
+      }
+    }
+
+    detail.subsections?.forEach((entry) => {
+      if (!this.subsectionStates.has(entry.index)) {
+        this.subsectionStates.set(entry.index, {
+          open: false,
+          loading: false,
+          error: null,
+          detail: null,
+          abortController: null,
+        });
+      }
+    });
+  }
+
+  private async loadSubsectionDetail(index: string): Promise<void> {
+    const current = this.subsectionStates.get(index);
+    if (!current || current.loading) {
+      return;
+    }
+
+    current.abortController?.abort();
+    const controller = new AbortController();
+    const nextState: SubsectionState = {
+      ...current,
+      loading: true,
+      error: null,
+      abortController: controller,
+    };
+    this.subsectionStates.set(index, nextState);
+    this.update();
+
+    try {
+      const detail = await fetchSrdCompendiumDetail('rule-sections', index, controller.signal);
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (detail.type !== 'rule-section') {
+        throw new Error('Unexpected subsection type.');
+      }
+      const latest = this.subsectionStates.get(index);
+      if (!latest) return;
+      this.subsectionStates.set(index, {
+        ...latest,
+        loading: false,
+        error: null,
+        detail,
+        abortController: null,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const latest = this.subsectionStates.get(index);
+      if (!latest) return;
+      this.subsectionStates.set(index, {
+        ...latest,
+        loading: false,
+        error:
+          error instanceof Error && error.message
+            ? error.message
+            : 'Unable to load subsection details.',
+        abortController: null,
+      });
+    } finally {
+      this.update();
+    }
+  }
+
+  private handleSubsectionToggle(index: string, event: Event): void {
+    const element = event.currentTarget as HTMLDetailsElement | null;
+    if (!element) return;
+
+    const open = element.open;
+    const state = this.subsectionStates.get(index);
+    if (!state) {
+      return;
+    }
+
+    if (!open && state.abortController) {
+      state.abortController.abort();
+    }
+
+    this.subsectionStates.set(index, {
+      ...state,
+      open,
+      loading: open ? state.loading : false,
+      abortController: open ? state.abortController : null,
+    });
+
+    if (open && (!state.detail || state.error)) {
+      void this.loadSubsectionDetail(index);
+    } else {
+      this.update();
+    }
+  }
+
+  private renderRuleSubsection(index: string, name: string): unknown {
+    let state = this.subsectionStates.get(index);
+    if (!state) {
+      const initialState: SubsectionState = {
+        open: false,
+        loading: false,
+        error: null,
+        detail: null,
+        abortController: null,
+      };
+      this.subsectionStates.set(index, initialState);
+      state = initialState;
+    }
+
+    return html`<li>
+      <details
+        class="subsection-panel"
+        ?open=${state.open}
+        @toggle=${(event: Event) => this.handleSubsectionToggle(index, event)}
+      >
+        <summary>
+          <span class="summary-label">${name}</span>
+          <span class="subsection-indicator">${state.open ? '▲' : '▼'}</span>
+        </summary>
+        <div class="subsection-content">
+          ${state.loading
+            ? html`<p class="loading">Loading subsection…</p>`
+            : state.error
+            ? html`<p class="error">${state.error}</p>`
+            : state.detail
+            ? this.renderParagraphs(state.detail.description)
+            : html`<p class="placeholder">Open to view subsection details.</p>`}
+        </div>
+      </details>
+    </li>`;
   }
 
   private renderDetail(detail: SrdCompendiumDetail): unknown {
@@ -303,6 +472,7 @@ export class DDDndCompendium extends HTMLElement {
   }
 
   private renderRuleDetail(detail: SrdRuleDetail): unknown {
+    this.prepareSubsections(detail);
     return html`
       <header>
         <h3>${detail.name}</h3>
@@ -313,7 +483,7 @@ export class DDDndCompendium extends HTMLElement {
         ? html`<div class="subsections">
             <h4>Subsections</h4>
             <ul>
-              ${detail.subsections.map((entry) => html`<li>${entry.name}</li>`)}
+              ${detail.subsections.map((entry) => this.renderRuleSubsection(entry.index, entry.name))}
             </ul>
           </div>`
         : null}
@@ -550,6 +720,49 @@ export class DDDndCompendium extends HTMLElement {
 
         .subsections li {
           margin-bottom: 0.25rem;
+        }
+
+        .subsection-panel {
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          padding: 0.45rem 0.6rem;
+          background: rgba(32, 24, 44, 0.4);
+        }
+
+        .subsection-panel summary {
+          cursor: pointer;
+          font-weight: 600;
+          list-style: none;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+        }
+
+        .subsection-panel summary::-webkit-details-marker,
+        .subsection-panel summary::marker {
+          display: none;
+        }
+
+        .summary-label {
+          flex: 1;
+        }
+
+        .subsection-indicator {
+          font-size: 0.75rem;
+          color: rgba(255, 255, 255, 0.65);
+        }
+
+        .subsection-panel[open] {
+          background: rgba(137, 227, 185, 0.08);
+          border-color: rgba(137, 227, 185, 0.35);
+        }
+
+        .subsection-content {
+          margin-top: 0.5rem;
+          display: grid;
+          gap: 0.45rem;
+          font-size: 0.9rem;
         }
 
         @media (max-width: 768px) {
