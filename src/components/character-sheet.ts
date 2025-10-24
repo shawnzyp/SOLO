@@ -249,8 +249,9 @@ export class DDCharacterSheet extends HTMLElement {
               <div class="identity">
                 <div
                   class="portrait"
-                  style="background-image: url('${hero.portrait ||
-                    'https://avatars.dicebear.com/api/adventurer/dd-hero.svg'}');"
+                  style="background-image: url('${
+                    hero.portrait || 'https://api.dicebear.com/7.x/adventurer/svg?seed=dd-hero'
+                  }');"
                 ></div>
                 <div>
                   <h2>${hero.name}</h2>
