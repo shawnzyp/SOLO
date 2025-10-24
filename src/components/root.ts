@@ -130,7 +130,8 @@ interface ArcaneCancelEventDetail {
 }
 
 const DEFAULT_HERO_NAME = 'Lone Adventurer';
-const DEFAULT_HERO_PORTRAIT = 'https://avatars.dicebear.com/api/adventurer/chronicles.svg';
+const DEFAULT_HERO_PORTRAIT =
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=chronicles';
 const HERO_NAME_MAX_LENGTH = 40;
 const ATTRIBUTE_ORDER: Array<keyof Hero['attributes']> = [...ABILITY_ORDER];
 const MAX_ABILITY_REROLLS = 2;
@@ -2831,7 +2832,7 @@ export class DDRoot extends HTMLElement {
                             <span class="field-icon" aria-hidden="true">🖼️</span>
                             <input
                               name="portrait"
-                              placeholder="https://avatars.dicebear.com/api/adventurer/aria.svg"
+                              placeholder="https://api.dicebear.com/7.x/adventurer/svg?seed=aria"
                               inputmode="url"
                               .value=${heroCreation.portrait}
                             />
