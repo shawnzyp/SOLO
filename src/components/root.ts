@@ -374,6 +374,9 @@ export class DDRoot extends HTMLElement {
     this.handleStoryTypingStart = this.handleStoryTypingStart.bind(this);
     this.handleStoryTypingComplete = this.handleStoryTypingComplete.bind(this);
     this.handleTabActivate = this.handleTabActivate.bind(this);
+
+    // Render immediately so the shell is visible before async data loads.
+    this.requestRender();
   }
 
   connectedCallback(): void {
