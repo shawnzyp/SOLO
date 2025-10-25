@@ -3203,4 +3203,8 @@ export class DDRoot extends HTMLElement {
   }
 }
 
-customElements.define('dd-root', DDRoot);
+const ROOT_ELEMENT_TAG = 'dd-root';
+
+if (!customElements.get(ROOT_ELEMENT_TAG)) {
+  customElements.define(ROOT_ELEMENT_TAG, DDRoot);
+}
