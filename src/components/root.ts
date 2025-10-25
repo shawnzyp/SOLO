@@ -65,6 +65,7 @@ import './dice-workbench';
 import './downtime-planner';
 import './arcane-storyteller';
 import { loadConfiguredModules } from '../systems/modules';
+import { createAbortController, getAbortSignal } from '../systems/abort-controller';
 import type { ArcaneStorytellerPanelState } from './arcane-storyteller';
 
 const INITIAL_HERO_OPTIONS: HeroOptionSnapshot = {
@@ -676,7 +677,8 @@ export class DDRoot extends HTMLElement {
     event.stopPropagation();
     const { prompt, requestId } = event.detail;
     if (!prompt) return;
-    const abortController = new AbortController();
+    const abortController = createAbortController();
+    const signal = getAbortSignal(abortController);
     if (this.storytellerAbortController) {
       this.storytellerAbortController.abort();
     }
@@ -695,7 +697,7 @@ export class DDRoot extends HTMLElement {
 
     try {
       const updateStatus = (status: string) => {
-        if (abortController.signal.aborted) return;
+        if (signal?.aborted) return;
         this.state = {
           ...this.state,
           storyteller: {
@@ -710,7 +712,7 @@ export class DDRoot extends HTMLElement {
         this.requestRender();
       };
       const result = await this.world.improviseNarrative(prompt, {
-        signal: abortController.signal,
+        signal,
         onStatus: updateStatus,
       });
       const originLabel = result.origin === 'oracle-llm'
@@ -733,7 +735,7 @@ export class DDRoot extends HTMLElement {
         tone: 'info',
       });
     } catch (error) {
-      const aborted = abortController.signal.aborted;
+      const aborted = signal?.aborted ?? false;
       this.state = {
         ...this.state,
         storyteller: {
@@ -1243,8 +1245,9 @@ export class DDRoot extends HTMLElement {
       this.srdAbortController.abort();
     }
 
-    const controller = new AbortController();
+    const controller = createAbortController();
     this.srdAbortController = controller;
+    const signal = getAbortSignal(controller);
 
     this.state = {
       ...this.state,
@@ -1254,8 +1257,8 @@ export class DDRoot extends HTMLElement {
     this.requestRender();
 
     try {
-      await loadSrdHeroOptions(controller.signal);
-      if (controller.signal.aborted) {
+      await loadSrdHeroOptions(signal);
+      if (signal?.aborted) {
         return;
       }
       this.state = {
@@ -1263,7 +1266,7 @@ export class DDRoot extends HTMLElement {
         heroOptionsLoading: false,
       };
     } catch (error) {
-      if (controller.signal.aborted) {
+      if (signal?.aborted) {
         return;
       }
       const message =
@@ -1289,8 +1292,9 @@ export class DDRoot extends HTMLElement {
       this.compendiumAbortController.abort();
     }
 
-    const controller = new AbortController();
+    const controller = createAbortController();
     this.compendiumAbortController = controller;
+    const signal = getAbortSignal(controller);
 
     this.state = {
       ...this.state,
@@ -1301,9 +1305,9 @@ export class DDRoot extends HTMLElement {
 
     try {
       const results = await Promise.all(
-        COMPENDIUM_CATEGORY_ORDER.map((entry) => fetchSrdCompendiumIndex(entry.id, controller.signal)),
+        COMPENDIUM_CATEGORY_ORDER.map((entry) => fetchSrdCompendiumIndex(entry.id, signal)),
       );
-      if (controller.signal.aborted) {
+      if (signal?.aborted) {
         return;
       }
       const compendium = createEmptyCompendiumIndex();
@@ -1319,7 +1323,7 @@ export class DDRoot extends HTMLElement {
         compendiumLoading: false,
       };
     } catch (error) {
-      if (controller.signal.aborted) {
+      if (signal?.aborted) {
         return;
       }
       const message =
@@ -1349,14 +1353,19 @@ export class DDRoot extends HTMLElement {
       this.moduleAbortController.abort();
     }
 
-    const controller = new AbortController();
+    const controller = createAbortController();
     this.moduleAbortController = controller;
+    const signal = getAbortSignal(controller);
 
     try {
-      await loadConfiguredModules(controller.signal);
+      await loadConfiguredModules(signal);
     } catch (error) {
-      if (!controller.signal.aborted) {
+      if (!signal?.aborted) {
         console.warn('Content module load failed', error);
+      }
+    } finally {
+      if (this.moduleAbortController === controller) {
+        this.moduleAbortController = null;
       }
     }
   }

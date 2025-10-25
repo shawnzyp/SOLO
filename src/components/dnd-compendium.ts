@@ -11,6 +11,7 @@ import {
   type SrdRuleSectionDetail,
   type SrdSpellDetail,
 } from '../systems/dnd5e';
+import { createAbortController, getAbortSignal } from '../systems/abort-controller';
 
 interface CompendiumCategorySummary {
   id: SrdCompendiumCategory;
@@ -116,8 +117,9 @@ export class DDDndCompendium extends HTMLElement {
       this.detailAbortController.abort();
     }
 
-    const controller = new AbortController();
+    const controller = createAbortController();
     this.detailAbortController = controller;
+    const signal = getAbortSignal(controller);
     const requestKey = `${category}/${entryIndex}`;
     this.pendingDetailKey = requestKey;
     this.detailLoading = true;
@@ -127,8 +129,8 @@ export class DDDndCompendium extends HTMLElement {
     this.update();
 
     try {
-      const detail = await fetchSrdCompendiumDetail(category, entryIndex, controller.signal);
-      if (controller.signal.aborted || this.pendingDetailKey !== requestKey) {
+      const detail = await fetchSrdCompendiumDetail(category, entryIndex, signal);
+      if ((signal?.aborted ?? false) || this.pendingDetailKey !== requestKey) {
         return;
       }
       this.detail = detail;
@@ -139,7 +141,7 @@ export class DDDndCompendium extends HTMLElement {
       }
       this.detailLoading = false;
     } catch (error) {
-      if (controller.signal.aborted || this.pendingDetailKey !== requestKey) {
+      if ((signal?.aborted ?? false) || this.pendingDetailKey !== requestKey) {
         return;
       }
       this.detailLoading = false;
@@ -229,7 +231,8 @@ export class DDDndCompendium extends HTMLElement {
     }
 
     current.abortController?.abort();
-    const controller = new AbortController();
+    const controller = createAbortController();
+    const signal = getAbortSignal(controller);
     const nextState: SubsectionState = {
       ...current,
       loading: true,
@@ -240,8 +243,8 @@ export class DDDndCompendium extends HTMLElement {
     this.update();
 
     try {
-      const detail = await fetchSrdCompendiumDetail('rule-sections', index, controller.signal);
-      if (controller.signal.aborted) {
+      const detail = await fetchSrdCompendiumDetail('rule-sections', index, signal);
+      if (signal?.aborted) {
         return;
       }
       if (detail.type !== 'rule-section') {
@@ -257,7 +260,7 @@ export class DDDndCompendium extends HTMLElement {
         abortController: null,
       });
     } catch (error) {
-      if (controller.signal.aborted) {
+      if (signal?.aborted) {
         return;
       }
       const latest = this.subsectionStates.get(index);
