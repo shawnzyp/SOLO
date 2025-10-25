@@ -14,6 +14,7 @@ import type {
   MLCEngine,
   ModelRecord,
 } from '@mlc-ai/web-llm';
+import { createAbortController, getAbortSignal } from './abort-controller';
 
 interface StorytellerConfig {
   endpoint?: string;
@@ -210,21 +211,25 @@ export class ArcaneStorytellerEngine {
   ): Promise<ArcaneNarrativeResult | null> {
     if (typeof fetch === 'undefined') return null;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-    const signal = options?.signal;
+    const controller = createAbortController();
+    const controllerSignal = getAbortSignal(controller);
+    const timeout = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
+    const externalSignal = options?.signal;
+    const requestSignal = controllerSignal ?? externalSignal;
     let abortListener: (() => void) | null = null;
-    if (signal) {
-      if (signal.aborted) {
+    if (controller && externalSignal) {
+      if (externalSignal.aborted) {
         controller.abort();
       } else {
         abortListener = () => controller.abort();
-        signal.addEventListener('abort', abortListener, { once: true });
+        externalSignal.addEventListener('abort', abortListener, { once: true });
       }
+    } else if (!controller && externalSignal?.aborted) {
+      throw createAbortError();
     }
 
     try {
-      safeOnStatus(options?.onStatus, 'Awaiting the remote oracle…', signal);
+      safeOnStatus(options?.onStatus, 'Awaiting the remote oracle…', externalSignal);
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
@@ -249,7 +254,7 @@ export class ArcaneStorytellerEngine {
           model: this.model ?? undefined,
           context: narrativeContext,
         }),
-        signal: controller.signal,
+        signal: requestSignal,
       });
 
       if (!response.ok) {
@@ -262,16 +267,18 @@ export class ArcaneStorytellerEngine {
       const node = this.normalizeExternalNode(rawNode, returnNodeId);
       if (!node) return null;
 
-      safeOnStatus(options?.onStatus, 'Remote oracle replied.', signal);
+      safeOnStatus(options?.onStatus, 'Remote oracle replied.', externalSignal);
       return {
         node,
         origin: 'oracle-llm',
         prompt,
       };
     } finally {
-      clearTimeout(timeout);
-      if (abortListener && signal) {
-        signal.removeEventListener('abort', abortListener);
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      if (abortListener && externalSignal) {
+        externalSignal.removeEventListener('abort', abortListener);
       }
     }
   }
