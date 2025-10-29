@@ -91,6 +91,7 @@ export class World implements EventTarget {
     apiKey: ARCANE_STORYTELLER_CONFIG.apiKey ?? undefined,
     model: ARCANE_STORYTELLER_CONFIG.model ?? undefined,
   });
+  private persistenceDisabled = false;
 
   addEventListener(
     type: WorldEventType,
@@ -121,9 +122,10 @@ export class World implements EventTarget {
   }
 
   restore(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || this.persistenceDisabled) return;
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const storage = window.localStorage;
+      const raw = storage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as WorldState;
       if (!parsed.discoveredNodes) {
@@ -153,6 +155,17 @@ export class World implements EventTarget {
       this.emit('state-change', this.snapshot);
     } catch (error) {
       console.warn('Failed to restore world state', error);
+      if (error instanceof DOMException) {
+        this.persistenceDisabled = true;
+        return;
+      }
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch (storageError) {
+        if (storageError instanceof DOMException) {
+          this.persistenceDisabled = true;
+        }
+      }
     }
   }
 
@@ -925,9 +938,16 @@ export class World implements EventTarget {
   }
 
   private persist(): void {
-    if (typeof window === 'undefined') return;
-    this.pruneExpiredDowntimeBuffs();
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    if (typeof window === 'undefined' || this.persistenceDisabled) return;
+    try {
+      this.pruneExpiredDowntimeBuffs();
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    } catch (error) {
+      console.warn('Failed to persist world state', error);
+      if (error instanceof DOMException) {
+        this.persistenceDisabled = true;
+      }
+    }
   }
 
   private pruneExpiredDowntimeBuffs(state: DowntimeState = this.state.downtime, referenceTime = Date.now()): void {
