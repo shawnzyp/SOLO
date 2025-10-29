@@ -1489,7 +1489,8 @@ export class DDRoot extends HTMLElement {
       })),
     };
     const heroNameTrimmed = heroCreation.name.trim();
-    const heroNameIsDefault = heroNameTrimmed.length === 0 || heroCreation.name === DEFAULT_HERO_NAME;
+    const heroNameIsDefault =
+      heroNameTrimmed.length === 0 || heroNameTrimmed === DEFAULT_HERO_NAME;
     const heroNameCharacterCount = Math.min(heroNameTrimmed.length, HERO_NAME_MAX_LENGTH);
     const portraitTrimmed = heroCreation.portrait.trim();
     const portraitProvided = portraitTrimmed.length > 0;
