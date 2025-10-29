@@ -63,6 +63,125 @@
         document.body.appendChild(container);
       });
     </script>
+    <script>
+      (function () {
+        const FALLBACK_PATH = './docs/index.html';
+        let fallbackTriggered = false;
+        let appReady = false;
+
+        function showManualRecovery(reason) {
+          const container = document.createElement('div');
+          container.className = 'unsupported-browser-notice';
+          container.innerHTML = `
+            <style>
+              .unsupported-browser-notice {
+                max-width: 520px;
+                margin: 4rem auto;
+                padding: 1.5rem;
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: #1f172e;
+                color: #f7f2ea;
+                font-family: 'Lora', 'Georgia', serif;
+                text-align: center;
+              }
+
+              .unsupported-browser-notice h1 {
+                margin: 0 0 0.75rem;
+                font-family: 'Cinzel', 'Times New Roman', serif;
+                font-size: 1.6rem;
+                letter-spacing: 0.08em;
+              }
+
+              .unsupported-browser-notice p {
+                margin: 0.5rem 0;
+                line-height: 1.6;
+              }
+
+              .unsupported-browser-notice code {
+                display: inline-block;
+                margin: 0.25rem 0;
+                padding: 0.15rem 0.35rem;
+                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.08);
+                font-family: 'Roboto Mono', 'Courier New', monospace;
+                font-size: 0.85rem;
+              }
+            </style>
+            <h1>Unable to launch the adventure</h1>
+            <p>${reason}</p>
+            <p>
+              If you are viewing the source files directly, start the development server with
+              <code>npm run dev</code> or open the built experience at <code>docs/index.html</code>.
+            </p>
+          `;
+          document.body.innerHTML = '';
+          document.body.appendChild(container);
+        }
+
+        function redirectToFallback(reason) {
+          if (fallbackTriggered || appReady) {
+            return;
+          }
+          fallbackTriggered = true;
+
+          const fallbackUrl = new URL(FALLBACK_PATH, window.location.href);
+          if (typeof fetch === 'function') {
+            fetch(fallbackUrl.href, { method: 'HEAD' })
+              .then((response) => {
+                if (response.ok) {
+                  window.location.replace(fallbackUrl.href);
+                } else {
+                  showManualRecovery(reason);
+                }
+              })
+              .catch(() => {
+                showManualRecovery(reason);
+              });
+          } else {
+            window.location.replace(fallbackUrl.href);
+          }
+        }
+
+        window.addEventListener(
+          'error',
+          (event) => {
+            const target = event.target;
+            if (
+              target instanceof HTMLScriptElement &&
+              target.type === 'module' &&
+              /\/src\/main\.ts($|\?)/.test(target.src ?? '')
+            ) {
+              redirectToFallback('The development entry point could not be compiled in this environment.');
+            }
+          },
+          true,
+        );
+
+        if ('customElements' in window && typeof window.customElements.whenDefined === 'function') {
+          window.customElements
+            .whenDefined('dd-root')
+            .then(() => {
+              appReady = true;
+            })
+            .catch(() => {
+              redirectToFallback('The application shell failed to initialise. Redirecting to the production build.');
+            });
+
+          window.addEventListener('load', () => {
+            if (!appReady) {
+              setTimeout(() => {
+                if (!appReady) {
+                  redirectToFallback('Loading timed out. Opening the optimised production build.');
+                }
+              }, 4000);
+            }
+          });
+        } else {
+          redirectToFallback('This browser does not support the required Web Components feature set.');
+        }
+      })();
+    </script>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>
