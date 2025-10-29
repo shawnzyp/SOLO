@@ -63,6 +63,7 @@ export class DDDowntimePlanner extends HTMLElement {
     risk: 'moderate',
     notes: '',
   };
+  private storageDisabled = false;
 
   constructor() {
     super();
@@ -80,9 +81,10 @@ export class DDDowntimePlanner extends HTMLElement {
   }
 
   private restore(): void {
-    if (typeof localStorage === 'undefined') return;
+    const storage = this.getStorage();
+    if (!storage) return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = storage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<StoredPlannerState>;
       const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
@@ -104,17 +106,40 @@ export class DDDowntimePlanner extends HTMLElement {
       }));
     } catch (error) {
       console.warn('Failed to restore downtime planner state', error);
+      if (error instanceof DOMException) {
+        this.storageDisabled = true;
+      }
     }
   }
 
   private persist(): void {
-    if (typeof localStorage === 'undefined') return;
+    const storage = this.getStorage();
+    if (!storage) return;
     const payload: StoredPlannerState = { tasks: this.tasks };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      storage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
       console.warn('Failed to persist downtime planner state', error);
+      if (error instanceof DOMException) {
+        this.storageDisabled = true;
+      }
     }
+  }
+
+  private getStorage(): Storage | null {
+    if (this.storageDisabled || typeof window === 'undefined') {
+      return null;
+    }
+    try {
+      return window.localStorage;
+    } catch (error) {
+      console.warn('Downtime planner storage is unavailable', error);
+      if (error instanceof DOMException) {
+        this.storageDisabled = true;
+      }
+      return null;
+    }
+    return null;
   }
 
   private dispatchTaskEvent(

@@ -85,6 +85,7 @@ export class DDDiceWorkbench extends HTMLElement {
   private favoriteName = '';
   private error: string | null = null;
   private currentHero: Hero | null = null;
+  private storageDisabled = false;
 
   constructor() {
     super();
@@ -102,9 +103,10 @@ export class DDDiceWorkbench extends HTMLElement {
   }
 
   private restoreState(): void {
-    if (typeof localStorage === 'undefined') return;
+    const storage = this.getStorage();
+    if (!storage) return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = storage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<StoredWorkbenchState>;
       const favorites = Array.isArray(parsed.favorites) ? parsed.favorites : [];
@@ -148,20 +150,43 @@ export class DDDiceWorkbench extends HTMLElement {
       }));
     } catch (error) {
       console.warn('Failed to restore dice workbench state', error);
+      if (error instanceof DOMException) {
+        this.storageDisabled = true;
+      }
     }
   }
 
   private persistState(): void {
-    if (typeof localStorage === 'undefined') return;
+    const storage = this.getStorage();
+    if (!storage) return;
     const payload: StoredWorkbenchState = {
       favorites: this.favorites,
       history: clampHistory(this.history),
     };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      storage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
       console.warn('Failed to persist dice workbench state', error);
+      if (error instanceof DOMException) {
+        this.storageDisabled = true;
+      }
     }
+  }
+
+  private getStorage(): Storage | null {
+    if (this.storageDisabled || typeof window === 'undefined') {
+      return null;
+    }
+    try {
+      return window.localStorage;
+    } catch (error) {
+      console.warn('Dice workbench storage is unavailable', error);
+      if (error instanceof DOMException) {
+        this.storageDisabled = true;
+      }
+      return null;
+    }
+    return null;
   }
 
   private setNotation(value: string): void {
